@@ -1,6 +1,7 @@
 ﻿import logging
 import html
 import requests
+import re
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes, ConversationHandler
 
@@ -23,15 +24,20 @@ user_data_temp = {}
 password_attempts = {}
 user_states = {}  # Track user states
 
-# Command /start
+# Функция для экранирования Markdown-символов
+def escape_markdown(text: str) -> str:
+    return re.sub(r'([*_`\[\]()])', r'\\\1', text)
+
+# Старт бота
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
-    username = f"@{user.username}" if user.username else user.first_name
-    
+    raw_username = f"@{user.username}" if user.username else user.first_name
+    username = escape_markdown(raw_username)
+
     logger.info(f"User {user_id} started the bot")
-    
-    # Check if user is banned
+
+    # Проверка блокировки
     if is_user_banned(user_id):
         await update.message.reply_text(
             "❌ *Ваш аккаунт заблокирован*\n\n"
@@ -40,20 +46,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=ReplyKeyboardRemove()
         )
         return ConversationHandler.END
-    
-    # Clear user state
+
+    # Сброс состояния
     user_states[user_id] = USERNAME
-    
+
+    # Приветственное сообщение
     await update.message.reply_text(
         f"Привет, {username} 👋🏻\n\n"
         "Этот Бот поможет Трейдерам Платформы *Konvert2pay* получать оповещения об открытых ордерах.",
         parse_mode='Markdown',
-        reply_markup=ReplyKeyboardRemove()  # Remove any existing keyboard
+        reply_markup=ReplyKeyboardRemove()
     )
-    
-    # Send login prompt as a separate message
+
+    # Запрос логина
     await update.message.reply_text("👤 Введите логин Трейдера:")
-    
+
     return USERNAME
 
 # Get username
