@@ -195,61 +195,52 @@ async def handle_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Show user list
 async def show_user_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    
-    # Check if user is admin
+
+    # Получаем message независимо от источника
+    message = update.message or (update.callback_query and update.callback_query.message)
+
+    # Проверка прав администратора
     if not is_admin(user_id):
-        await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
+        await message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
         return await show_main_menu(update, context)
-    
-    # Update user state
+
+    # Обновляем состояние
     user_states[user_id] = ADMIN_USER_LIST
     logger.info(f"Admin {user_id} is now in ADMIN_USER_LIST state")
-    
-    # Get all users from database
+
     users = get_all_users()
-    
-    # Create back button keyboard
-    keyboard = [
-        [BACK_BTN]
-    ]
-    
+
     reply_markup = ReplyKeyboardMarkup(
-        keyboard,
+        [[BACK_BTN]],
         resize_keyboard=True,
         one_time_keyboard=False
     )
-    
-    # Create user list message
+
+    # Если пользователей нет
     if not users:
-        await update.message.reply_text(
-            "👥 *Список пользователей*\n\n"
-            "Пользователей не найдено.",
+        await message.reply_text(
+            "👥 *Список пользователей*\n\nПользователей не найдено.",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
         return ADMIN_USER_LIST
-    
-    # Create inline keyboard with user actions
+
+    # Формируем inline-кнопки
     inline_buttons = []
     for user in users:
         user_telegram_id = user[0]
         user_tg_username = user[1] or "Неизвестно"
         user_role = user[2]
         user_banned = user[3]
-        
-        # Create user status text
+
         status = ""
         if user_role == "admin":
-            status = "👑 "
+            status += "👑 "
         if user_banned:
             status += "🚫 "
-        
-        # Create inline buttons for user actions
-        if user_banned:
-            action_text = "Разблокировать"
-        else:
-            action_text = "Заблокировать"
-        
+
+        action_text = "Разблокировать" if user_banned else "Заблокировать"
+
         inline_buttons.append([
             InlineKeyboardButton(
                 f"{status}{user_tg_username}",
@@ -260,22 +251,20 @@ async def show_user_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 callback_data=f"{BAN_USER_PREFIX}{user_telegram_id}"
             )
         ])
-    
+
     inline_keyboard = InlineKeyboardMarkup(inline_buttons)
-    
-    await update.message.reply_text(
-        "👥 *Список пользователей*\n\n"
-        "Выберите пользователя для действий:",
+
+    await message.reply_text(
+        "👥 *Список пользователей*\n\nВыберите пользователя для действий:",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-    
-    # Send user list with inline buttons
-    await update.message.reply_text(
+
+    await message.reply_text(
         "Пользователи:",
         reply_markup=inline_keyboard
     )
-    
+
     return ADMIN_USER_LIST
 
 # Handle user list buttons

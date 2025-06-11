@@ -33,10 +33,14 @@ def add_user(telegram_id, tg_username, platform_username):
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT OR IGNORE INTO users (telegram_id, tg_username, platform_username, role)
+            INSERT INTO users (telegram_id, tg_username, platform_username, role)
             VALUES (?, ?, ?, 'user')
+            ON CONFLICT(telegram_id) DO UPDATE SET 
+                tg_username = excluded.tg_username,
+                platform_username = excluded.platform_username
         ''', (telegram_id, tg_username, platform_username))
         conn.commit()
+
 
 def is_admin(telegram_id):
     with sqlite3.connect(DB_NAME) as conn:

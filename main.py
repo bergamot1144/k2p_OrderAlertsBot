@@ -56,7 +56,8 @@ def main():
             ADMIN_USER_LIST: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_list)],
             WAITING_INFO_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_info_text)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[CommandHandler("start", start), 
+                   CommandHandler("cancel", cancel)],
     )
     # Add conversation handler for info editing
     info_edit_conv_handler = ConversationHandler(
@@ -64,7 +65,9 @@ def main():
         states={
             WAITING_INFO_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_info_text)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+             
+            CommandHandler("cancel", cancel)],
     )
     # Add handlers
     app.add_handler(auth_conv_handler)

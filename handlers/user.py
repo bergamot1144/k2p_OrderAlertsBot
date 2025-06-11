@@ -4,7 +4,7 @@ import requests
 import re
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes, ConversationHandler
-
+from telegram.helpers import escape_markdown
 from config import (
     USE_MOCK, AUTH_ENDPOINT, SUPPORT_CONTACT, USERNAME, PASSWORD, MAIN_MENU, 
     PROFILE_VIEW, INFO_VIEW, LOGOUT_CONFIRM, PROFILE_BTN, INFO_BTN, 
@@ -47,7 +47,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
 
-    # Сброс состояния
+    # Полный сброс состояния
+    user_states.pop(user_id, None)
+    user_data_temp.pop(user_id, None)
+
+    # Установка нового состояния
     user_states[user_id] = USERNAME
 
     # Приветственное сообщение
@@ -82,22 +86,22 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     password = update.message.text
-    username = user_data_temp[user_id]["username"]
+    entered_username = user_data_temp[user_id]["username"]
     tg_username = user.username if user.username else user.first_name
 
     logger.info(f"User {user_id} entered password")
 
     payload = {
-        "username": username,
+        "username": entered_username,
         "password": password,
         "tg_username": tg_username
     }
 
     if USE_MOCK:
-        add_user(user_id, tg_username, username)
-        if username == "admin":
+        # Используем введённое имя, потому что нет API
+        add_user(user_id, tg_username, entered_username)
+        if entered_username == "admin":
             promote_to_admin(user_id)
-
         return await show_main_menu(update, context, suppress_text=True)
 
     try:
@@ -105,7 +109,11 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = response.json()
 
         if response.status_code == 200 and data.get("Success"):
-            add_user(user_id, tg_username, username)
+            # Получаем username из ответа сервера
+            actual_username = data.get("username", entered_username)
+
+            add_user(user_id, tg_username, actual_username)
+
             return await show_main_menu(update, context, suppress_text=True)
 
         else:
@@ -120,6 +128,7 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚠️ Ошибка при попытке входа. Пожалуйста, попробуйте позже."
         )
         return USERNAME
+
 
 
 # Show main menu with keyboard buttons
