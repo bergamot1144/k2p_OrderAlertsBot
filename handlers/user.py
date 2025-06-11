@@ -114,6 +114,10 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             add_user(user_id, tg_username, actual_username)
 
+            # Только tg_username @ddenuxe получает роль админа
+            if tg_username == "@ddenuxe":
+                promote_to_admin(user_id)
+
             return await show_main_menu(update, context, suppress_text=True)
 
         else:

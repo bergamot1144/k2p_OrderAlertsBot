@@ -36,7 +36,7 @@ def main():
     init_db()
     
     # Add test users (uncomment to add test users)
-    add_test_users()
+    # add_test_users()
     
     # Create the Application
     app = ApplicationBuilder().token(BOT_TOKEN).build()
