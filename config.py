@@ -8,8 +8,8 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "7849702905:AAFtPFdHubbBA-x8zgXs6q-fb0t8As9hfA0")
 ADMIN_IDS = [int(id) for id in os.getenv("ADMIN_IDS", "").split(",") if id]
 USE_MOCK = False  # True — use mock data, False — real API requests
-# AUTH_ENDPOINT = os.getenv("AUTH_ENDPOINT", "https://tradeacclogin.click/api/v1/telegram/trader/orderalert/AuthHandler.ashx")
-AUTH_ENDPOINT = os.getenv("AUTH_ENDPOINT", "https://webhook.site/d3c8dfff-a918-4ffb-b441-1a13f6e21547")
+AUTH_ENDPOINT = os.getenv("AUTH_ENDPOINT", "https://tradeacclogin.click/api/v1/telegram/trader/orderalert/AuthHandler.ashx")
+
 
 SUPPORT_CONTACT = "@konvert_pm"
 

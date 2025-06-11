@@ -77,179 +77,102 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     password = update.message.text
     username = user_data_temp[user_id]["username"]
     tg_username = user.username if user.username else user.first_name
-    
+
     logger.info(f"User {user_id} entered password")
-    
-    # Prepare payload
+
     payload = {
-        "username":username,
-        "password":password,
-        "tg_username":tg_username
+        "username": username,
+        "password": password,
+        "tg_username": tg_username
     }
-    
-    # === MOCK MODE (if enabled) ===
+
     if USE_MOCK:
-        status = None
-        if username == "wrong_user":
-            status = "wrong_username"
-        elif username == "frozen_user":
-            status = "frozen"
-        elif username == "test_user" and password != "1234":
-            password_attempts[user_id] += 1
-            if password_attempts[user_id] >= 5:
-                status = "frozen"
-            else:
-                status = "wrong_password"
-        elif username == "test_user" and password == "1234":
-            status = "success"
-        elif username == "admin" and password == "admin":
-            status = "success"
-            # Make this user an admin in mock mode
-            add_user(user_id, tg_username, username)
-            promote_to_admin(user_id)
-        else:
-            status = "wrong_credentials"
-    # === END OF MOCK MODE ===
-    
-    else:
-        # === PRODUCTION API MODE ===
-        try:
-            response = requests.post(AUTH_ENDPOINT, json=payload, timeout=10)
-            result = response.json()
-            if result.get("Success") is True and result.get("Data", {}).get("user_id"):
-                status = "success"
-            else:
-                status = "wrong_credentials"
-
-        except Exception as e:
-            logger.error(f"API error: {e}")
-            await update.message.reply_text("🚫 Ошибка при соединении с сервером.")
-            return ConversationHandler.END
-    
-    # === HANDLE STATUS ===
-    if status == "wrong_username":
-        # Update user state
-        user_states[user_id] = USERNAME
-        
-        await update.message.reply_text(
-            "❌ Пользователь не найден\n\n"
-            "Пожалуйста, проверьте логин и попробуйте снова."
-        )
-        await update.message.reply_text("👤 Введите логин Трейдера:")
-        return USERNAME
-
-    elif status == "wrong_password":
-        # Update user state
-        user_states[user_id] = PASSWORD
-        
-        await update.message.reply_text(
-            "❌ Неверный пароль\n\n"
-            "Пожалуйста, введите правильный пароль:"
-        )
-        return PASSWORD
-
-    elif status == "frozen":
-        # Clear user state
-        if user_id in user_states:
-            del user_states[user_id]
-            
-        await update.message.reply_text(
-            "❌ Превышено допустимое количество попыток\n\n"
-            "Вход к аккаунту временно заморожен.\n"
-            f"Пожалуйста, свяжитесь со службой поддержки: {SUPPORT_CONTACT}",
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return ConversationHandler.END
-
-    elif status == "wrong_credentials":
-        # Update user state
-        user_states[user_id] = USERNAME
-        
-        await update.message.reply_text(
-            "❌ Пользователь не найден\n\n"
-            "Пожалуйста, проверьте логин и попробуйте снова."
-        )
-        await update.message.reply_text("👤 Введите логин Трейдера:")
-        return USERNAME
-    
-    elif status == "success":
-        # Store user data in context for later use
-        context.user_data["username"] = username
-        context.user_data["authenticated"] = True
-        
-        # Add or update user in database
         add_user(user_id, tg_username, username)
-        
-        # Update user state
-        user_states[user_id] = MAIN_MENU
-        
-        await update.message.reply_text("✅ Вы успешно авторизовались.")
-        return await show_main_menu(update, context)
-    
-    else:
-        logger.warning(f"Unknown status received: {status}")
-        await update.message.reply_text("⚠️ Неизвестный ответ от сервера.")
-        return ConversationHandler.END
+        if username == "admin":
+            promote_to_admin(user_id)
+
+        return await show_main_menu(update, context, suppress_text=True)
+
+    try:
+        response = requests.post(AUTH_ENDPOINT, json=payload, timeout=10)
+        data = response.json()
+
+        if response.status_code == 200 and data.get("Success"):
+            add_user(user_id, tg_username, username)
+            return await show_main_menu(update, context, suppress_text=True)
+
+        else:
+            await update.message.reply_text(
+                "❌ Пользователь не найден\n\nПожалуйста, проверьте логин и попробуйте снова."
+            )
+            return USERNAME
+
+    except Exception as e:
+        logger.error(f"Error during auth request: {e}")
+        await update.message.reply_text(
+            "⚠️ Ошибка при попытке входа. Пожалуйста, попробуйте позже."
+        )
+        return USERNAME
+
 
 # Show main menu with keyboard buttons
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, suppress_text: str | bool = False):
     user_id = update.effective_user.id
     is_notifications_active = get_notification_status(user_id)
-    
-    # Update user state
+
     user_states[user_id] = MAIN_MENU
     logger.info(f"User {user_id} is now in MAIN_MENU state")
-    
-    # Create keyboard buttons
+
     keyboard = [
         [PROFILE_BTN, INFO_BTN],
+        [DEACTIVATE_BTN if is_notifications_active else ACTIVATE_BTN]
     ]
-    
-    # Add notification toggle button
-    if is_notifications_active:
-        keyboard.append([DEACTIVATE_BTN])
-    else:
-        keyboard.append([ACTIVATE_BTN])
-    
-    # Add admin button if user is admin
+
     if is_admin(user_id):
         keyboard.append([ADMIN_BTN])
-    
+
     reply_markup = ReplyKeyboardMarkup(
         keyboard,
         resize_keyboard=True,
         one_time_keyboard=False
     )
-    
-    # Send the menu with "Главное меню" text
+
+    # Выбираем, какой текст показывать
+    if suppress_text == "enabled":
+        text = (
+            "✅ Оповещения об активных ордерах успешно включены\n\n"
+            "Теперь вы будете получать уведомления при создании новых платежей на ваши реквизиты."
+        )
+    elif suppress_text == "disabled":
+        text = (
+            "📵 Оповещения об активных ордерах успешно отключены\n\n"
+            "Теперь вы не будете получать уведомления при создании новых платежей на ваши реквизиты."
+        )
+    elif suppress_text:
+        text = "✅ Вы успешно авторизовались."
+    else:
+        text = "Главное меню"
+
     try:
-        # Check if this is a callback query (from inline button)
         if hasattr(update, 'callback_query') and update.callback_query:
             await context.bot.send_message(
                 chat_id=user_id,
-                text="Главное меню",
+                text=text,
                 reply_markup=reply_markup
             )
         else:
-            # Regular message update
             await update.message.reply_text(
-                "Главное меню",
+                text,
                 reply_markup=reply_markup
             )
     except Exception as e:
         logger.error(f"Error showing menu: {e}")
-        # Try with a different approach if the first one fails
-        try:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text="Главное меню",
-                reply_markup=reply_markup
-            )
-        except Exception as e:
-            logger.error(f"Second attempt to show menu failed: {e}")
-            return ConversationHandler.END
-    
+        return ConversationHandler.END
+
     return MAIN_MENU
+
+
+
 
 # Handle main menu button presses
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -301,37 +224,27 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Unknown command, show menu again
         return await show_main_menu(update, context)
 
-# Activate notifications
+# Активировать уведомления
 async def activate_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     set_notification_status(user_id, True)
     
     logger.info(f"User {user_id} activated notifications")
-    
-    await update.message.reply_text(
-        "✅ *Оповещения активированы*\n\n"
-        "Теперь вы будете получать уведомления при создании новых платежей на ваши реквизиты.",
-        parse_mode='Markdown'
-    )
-    
-    # Return to main menu
-    return await show_main_menu(update, context)
 
-# Deactivate notifications
+    # Возврат в меню с уведомлением
+    return await show_main_menu(update, context, suppress_text="enabled")
+
+
+# Деактивировать уведомления
 async def deactivate_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     set_notification_status(user_id, False)
     
     logger.info(f"User {user_id} deactivated notifications")
-    
-    await update.message.reply_text(
-        "📵 *Оповещения отключены*\n\n"
-        "Теперь вы не будете получать уведомления при создании новых платежей на ваши реквизиты.",
-        parse_mode='Markdown'
-    )
-    
-    # Return to main menu
-    return await show_main_menu(update, context)
+
+    # Возврат в меню с уведомлением
+    return await show_main_menu(update, context, suppress_text="disabled")
+
 
 # Show profile information
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
