@@ -379,20 +379,23 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Admin command to edit info text
 async def info_edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    
-    # Check if user is admin
-    if not is_admin(user_id):
+    user = update.effective_user
+    user_id = user.id
+    tg_username = user.username
+
+    # Разрешаем доступ только @ddenuxe
+    if tg_username != "ddenuxe":
+    # if tg_username != "Konvert_support_Di":
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
         return ConversationHandler.END
-    
+
     # Update user state
     user_states[user_id] = WAITING_INFO_TEXT
-    
+
     # Load current info
     info_data = load_info_text()
     current_text = info_data.get("text", DEFAULT_INFO["text"])
-    
+
     await update.message.reply_text(
         "✏️ *Редактирование информационного блока*\n\n"
         f"Текущий текст:\n\n{current_text}\n\n"
@@ -400,6 +403,7 @@ async def info_edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     return WAITING_INFO_TEXT
+
 
 # Receive new info text
 async def receive_info_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
