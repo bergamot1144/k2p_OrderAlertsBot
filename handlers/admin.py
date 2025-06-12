@@ -4,7 +4,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from telegram.helpers import escape_markdown
 from config import (
     ADMIN_MENU, ADMIN_BROADCAST, ADMIN_USER_LIST, ADMIN_BROADCAST_BTN, 
-    ADMIN_USERS_BTN, ADMIN_STATS_BTN, ADMIN_INFO_EDIT_BTN, BACK_BTN, SUPPORT_CONTACT, 
+    ADMIN_USERS_BTN, ADMIN_STATS_BTN, BACK_BTN, SUPPORT_CONTACT, 
     WAITING_INFO_TEXT, MAIN_MENU, BAN_USER_PREFIX
 )
 from database import (
@@ -35,7 +35,7 @@ async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Create admin menu keyboard
     keyboard = [
         [ADMIN_BROADCAST_BTN, ADMIN_USERS_BTN],
-        [ADMIN_STATS_BTN, ADMIN_INFO_EDIT_BTN],
+        [ADMIN_STATS_BTN],
         [BACK_BTN]
     ]
     
@@ -79,8 +79,8 @@ async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await show_user_list(update, context)
     elif text == ADMIN_STATS_BTN:
         return await show_stats(update, context)
-    elif text == ADMIN_INFO_EDIT_BTN:
-        return WAITING_INFO_TEXT
+    # elif text == ADMIN_INFO_EDIT_BTN:
+    #     return WAITING_INFO_TEXT
     elif text == BACK_BTN:
         logger.info(f"Admin {user_id} pressed Back button in admin menu")
         
@@ -384,7 +384,7 @@ async def info_edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_username = user.username
 
     # Разрешаем доступ только @ddenuxe
-    if tg_username != "ddenuxe":
+    if tg_username != "Konvert_support_Di":
     # if tg_username != "Konvert_support_Di":
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
         return ConversationHandler.END
