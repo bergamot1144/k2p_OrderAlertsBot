@@ -19,10 +19,10 @@ from handlers.admin import (
     handle_admin_menu, handle_broadcast, handle_user_list, 
     handle_ban_user, info_edit_command, receive_info_text
 )
-from handlers.admin_commands import (
-    add_user_command, delete_user_command, make_admin_command, 
-    list_users_command, admin_help_command
-)
+# from handlers.admin_commands import (
+#     add_user_command, delete_user_command, make_admin_command, 
+#     list_users_command, admin_help_command
+# )
 
 # Configure logging
 logging.basicConfig(
@@ -40,7 +40,17 @@ def main():
     
     # Create the Application
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    
+
+    # Add conversation handler for info editing
+    info_edit_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("infoedit", info_edit_command)],
+        states={
+            WAITING_INFO_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_info_text)],
+        },
+        fallbacks=[
+             
+            CommandHandler("cancel", cancel)],
+    )
     # Add conversation handler for authentication
     auth_conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -59,27 +69,18 @@ def main():
         fallbacks=[CommandHandler("start", start), 
                    CommandHandler("cancel", cancel)],
     )
-    # Add conversation handler for info editing
-    info_edit_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("infoedit", info_edit_command)],
-        states={
-            WAITING_INFO_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_info_text)],
-        },
-        fallbacks=[
-             
-            CommandHandler("cancel", cancel)],
-    )
+    
     # Add handlers
     app.add_handler(auth_conv_handler)
     app.add_handler(CommandHandler("infoedit", info_edit_command))
     app.add_handler(CommandHandler("unlock", unlock_callback))
     
     # Add admin command handlers
-    app.add_handler(CommandHandler("adduser", add_user_command))
-    app.add_handler(CommandHandler("deleteuser", delete_user_command))
-    app.add_handler(CommandHandler("makeadmin", make_admin_command))
-    app.add_handler(CommandHandler("listusers", list_users_command))
-    app.add_handler(CommandHandler("adminhelp", admin_help_command))
+    # app.add_handler(CommandHandler("adduser", add_user_command))
+    # app.add_handler(CommandHandler("deleteuser", delete_user_command))
+    # app.add_handler(CommandHandler("makeadmin", make_admin_command))
+    # app.add_handler(CommandHandler("listusers", list_users_command))
+    # app.add_handler(CommandHandler("adminhelp", admin_help_command))
     
     # Add callback query handlers
     app.add_handler(CallbackQueryHandler(cancel_logout, pattern=f"^{CANCEL_LOGOUT}$"))

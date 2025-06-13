@@ -97,12 +97,12 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "tg_username": tg_username
     }
 
-    if USE_MOCK:
-        # Используем введённое имя, потому что нет API
-        add_user(user_id, tg_username, entered_username)
-        if entered_username == "admin":
-            promote_to_admin(user_id)
-        return await show_main_menu(update, context, suppress_text=True)
+    # if USE_MOCK:
+    #     # Используем введённое имя, потому что нет API
+    #     add_user(user_id, tg_username, entered_username)
+    #     if entered_username == "admin":
+    #         promote_to_admin(user_id)
+    #     return await show_main_menu(update, context, suppress_text=True)
 
     try:
         response = requests.post(AUTH_ENDPOINT, json=payload, timeout=10)
@@ -115,7 +115,7 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
             add_user(user_id, tg_username, actual_username)
 
             # Только tg_username @ddenuxe получает роль админа
-            if tg_username == "Konvert_support_Di":
+            if tg_username == "ddenuxe":
                 promote_to_admin(user_id)
 
             return await show_main_menu(update, context, suppress_text=True)
@@ -578,41 +578,11 @@ async def handle_info_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Unknown command, stay in info view
         return await show_info(update, context)
 
-# Receive new info text
-async def receive_info_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    new_text = update.message.text
-    
-    # Check if user is admin
-    if not is_admin(user_id):
-        await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
-        return ConversationHandler.END
-    
-    # Check if user wants to cancel
-    if new_text == BACK_BTN:
-        logger.info(f"Admin {user_id} canceled info editing")
-        
-        # Update user state
-        user_states[user_id] = INFO_VIEW
-        
-        # Return to info view
-        return await show_info(update, context)
-    
-    # Save new info text
-    info_data = {"text": new_text}
-    save_info_text(info_data)
-    
-    logger.info(f"Admin {user_id} updated info text")
-    
-    await update.message.reply_text(
-        "✅ *Информационный блок обновлен*\n\n"
-        f"Новый текст:\n\n{new_text}",
-        parse_mode='Markdown'
-    )
-    
-    # Return to info view
-    user_states[user_id] = INFO_VIEW
-    return await show_info(update, context)
+
+
+
+
+
 
 # Cancel
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -640,6 +610,9 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_id in user_states:
             del user_states[user_id]
         return ConversationHandler.END
+
+
+
 
 # 👇 This function is called externally (via webhook from the platform) when access is unblocked
 async def unlock_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

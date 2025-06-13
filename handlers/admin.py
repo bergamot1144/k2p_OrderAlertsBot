@@ -12,7 +12,11 @@ from database import (
     get_user_stats
 )
 from utils import load_info_text, save_info_text
-from config import DEFAULT_INFO
+from config import DEFAULT_INFO, INFO_VIEW
+from states import WAITING_INFO_TEXT
+from utils import load_info_text
+from handlers.session import user_states
+from handlers.user import is_admin, show_info
 
 logger = logging.getLogger(__name__)
 
@@ -384,8 +388,8 @@ async def info_edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_username = user.username
 
     # Разрешаем доступ только @ddenuxe
-    if tg_username != "Konvert_support_Di":
-    # if tg_username != "Konvert_support_Di":
+    if tg_username != "ddenuxe":
+    
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
         return ConversationHandler.END
 
@@ -408,28 +412,35 @@ async def info_edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Receive new info text
 async def receive_info_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    new_text = update.message.text.strip()
+    new_text = update.message.text
     
-    # Проверка прав
+    # Check if user is admin
     if not is_admin(user_id):
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
         return ConversationHandler.END
-
-    # Сохраняем текст
+    
+    # Check if user wants to cancel
+    if new_text == BACK_BTN:
+        logger.info(f"Admin {user_id} canceled info editing")
+        
+        # Update user state
+        user_states[user_id] = INFO_VIEW
+        
+        # Return to info view
+        return await show_info(update, context)
+    
+    # Save new info text
     info_data = {"text": new_text}
     save_info_text(info_data)
+    
     logger.info(f"Admin {user_id} updated info text")
-
-    # Обновляем состояние
-    user_states[user_id] = ADMIN_MENU
-
-    # Экранируем текст для Markdown
-    escaped_text = escape_markdown(new_text, version=2)
-
+    
     await update.message.reply_text(
-        f"✅ *Информационный блок обновлён*\n\nНовый текст:\n\n{escaped_text}",
-        parse_mode='MarkdownV2'
+        "✅ *Информационный блок обновлен*\n\n"
+        f"Новый текст:\n\n{new_text}",
+        parse_mode='Markdown'
     )
-
-    # Возврат в админ-меню
-    return await show_admin_menu(update, context)
+    
+    # Return to info view
+    user_states[user_id] = INFO_VIEW
+    return await show_info(update, context)

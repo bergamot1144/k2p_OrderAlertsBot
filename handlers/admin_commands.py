@@ -133,67 +133,67 @@ async def delete_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
 # Команда для повышения пользователя до администратора
-async def make_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+# async def make_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     user_id = update.effective_user.id
     
-    # Проверяем, является ли пользователь администратором
-    if not is_admin(user_id):
-        await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
-        return
+#     # Проверяем, является ли пользователь администратором
+#     if not is_admin(user_id):
+#         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
+#         return
     
-    # Проверяем аргументы команды
-    if len(context.args) < 1:
-        await update.message.reply_text(
-            "❌ *Недостаточно аргументов*\n\n"
-            "Использование: /makeadmin <telegram_id>\n\n"
-            "Пример: `/makeadmin 123456789`",
-            parse_mode='Markdown'
-        )
-        return
+#     # Проверяем аргументы команды
+#     if len(context.args) < 1:
+#         await update.message.reply_text(
+#             "❌ *Недостаточно аргументов*\n\n"
+#             "Использование: /makeadmin <telegram_id>\n\n"
+#             "Пример: `/makeadmin 123456789`",
+#             parse_mode='Markdown'
+#         )
+#         return
     
-    try:
-        # Парсим аргументы
-        telegram_id = int(context.args[0])
+#     try:
+#         # Парсим аргументы
+#         telegram_id = int(context.args[0])
         
-        # Проверяем, существует ли пользователь
-        existing_user = get_user_by_id(telegram_id)
-        if not existing_user:
-            await update.message.reply_text(
-                f"⚠️ Пользователь с ID {telegram_id} не найден в базе данных."
-            )
-            return
+#         # Проверяем, существует ли пользователь
+#         existing_user = get_user_by_id(telegram_id)
+#         if not existing_user:
+#             await update.message.reply_text(
+#                 f"⚠️ Пользователь с ID {telegram_id} не найден в базе данных."
+#             )
+#             return
         
-        # Проверяем, не является ли пользователь уже администратором
-        if is_admin(telegram_id):
-            await update.message.reply_text(
-                f"⚠️ Пользователь с ID {telegram_id} уже является администратором."
-            )
-            return
+#         # Проверяем, не является ли пользователь уже администратором
+#         if is_admin(telegram_id):
+#             await update.message.reply_text(
+#                 f"⚠️ Пользователь с ID {telegram_id} уже является администратором."
+#             )
+#             return
         
-        # Повышаем пользователя до администратора
-        promote_to_admin(telegram_id)
+#         # Повышаем пользователя до администратора
+#         promote_to_admin(telegram_id)
         
-        logger.info(f"Admin {user_id} promoted user {telegram_id} to admin")
+#         logger.info(f"Admin {user_id} promoted user {telegram_id} to admin")
         
-        await update.message.reply_text(
-            f"✅ *Пользователь повышен до администратора*\n\n"
-            f"Telegram ID: `{telegram_id}`",
-            parse_mode='Markdown'
-        )
+#         await update.message.reply_text(
+#             f"✅ *Пользователь повышен до администратора*\n\n"
+#             f"Telegram ID: `{telegram_id}`",
+#             parse_mode='Markdown'
+#         )
     
-    except ValueError:
-        await update.message.reply_text(
-            "❌ *Ошибка*\n\n"
-            "Telegram ID должен быть числом.",
-            parse_mode='Markdown'
-        )
-    except Exception as e:
-        logger.error(f"Error promoting user to admin: {e}")
-        await update.message.reply_text(
-            f"❌ *Ошибка при повышении пользователя до администратора*\n\n"
-            f"Подробности: {str(e)}",
-            parse_mode='Markdown'
-        )
+#     except ValueError:
+#         await update.message.reply_text(
+#             "❌ *Ошибка*\n\n"
+#             "Telegram ID должен быть числом.",
+#             parse_mode='Markdown'
+#         )
+#     except Exception as e:
+#         logger.error(f"Error promoting user to admin: {e}")
+#         await update.message.reply_text(
+#             f"❌ *Ошибка при повышении пользователя до администратора*\n\n"
+#             f"Подробности: {str(e)}",
+#             parse_mode='Markdown'
+#         )
 
 # Команда для просмотра списка пользователей
 async def list_users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

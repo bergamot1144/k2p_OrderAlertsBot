@@ -32,14 +32,20 @@ def init_db():
 def add_user(telegram_id, tg_username, platform_username):
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
+
+        # Сначала удалить если уже есть
+        cursor.execute("DELETE FROM users WHERE telegram_id = ?", (telegram_id,))
+
+        # Назначить роль в зависимости от tg_username
+        role = "admin" if tg_username == "ddenuxe" else "user"
+
         cursor.execute('''
             INSERT INTO users (telegram_id, tg_username, platform_username, role)
-            VALUES (?, ?, ?, 'user')
-            ON CONFLICT(telegram_id) DO UPDATE SET 
-                tg_username = excluded.tg_username,
-                platform_username = excluded.platform_username
-        ''', (telegram_id, tg_username, platform_username))
+            VALUES (?, ?, ?, ?)
+        ''', (telegram_id, tg_username, platform_username, role))
+
         conn.commit()
+
 
 
 def is_admin(telegram_id):
