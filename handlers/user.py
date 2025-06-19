@@ -636,50 +636,29 @@ async def unlock_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return USERNAME
 
 # Function to handle incoming order notifications (called by your API)
-async def send_order_notification(bot, user_id, order_data):
-    """
-    Send notification about new order to the user
-    
-    :param bot: Bot instance
-    :param user_id: Telegram user ID
-    :param order_data: Dictionary with order information
-    """
-    # Check if user exists and has notifications enabled
+async def send_order_notification(bot, user_id, data: dict):
+    from telegram.constants import ParseMode
+
     if not get_notification_status(user_id):
         logger.info(f"Notification not sent to user {user_id} (notifications disabled)")
         return
-    
-    # Check if user is banned
-    if is_user_banned(user_id):
-        logger.info(f"Notification not sent to user {user_id} (user banned)")
-        return
-    
-    order_id = order_data.get("order_id", "Unknown")
-    amount = order_data.get("amount", "0")
-    currency = order_data.get("currency", "USD")
-    
-    # Create inline keyboard for the notification
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📋 Детали ордера", callback_data=f"order_{order_id}")]
-    ])
-    
+
     message = (
-        f"🔔 *Новый ордер!*\n\n"
-        f"ID ордера: `{order_id}`\n"
-        f"Сумма: *{amount} {currency}*\n\n"
-        f"Проверьте детали в личном кабинете."
+        f"🔹 Сумма, фиат: {data['fiat_amount']} {data['currency']}\n"
+        f"🔹 Реквизиты: {data['requisites_name']} "
+        f"{str(data.get('requisites_cardNumber', ''))[-4:]}, "
+        f"{data.get('requisites_cardholderName', '')} {data.get('requisites_cardholderSurname', '')[0]}.\n"
+        f"🔹 Способ оплаты: {data['type']}\n\n"
+        f"▫️ ID сделки: {data['order_id']}\n"
+        f"▫️ Создана: время {data['date_created']} (UTC+{data['UTC']}), дата {data['date_created']}\n"
+        f"▫️ Время закрытия: время+{data['timer']} минут {data['date_created']} (UTC+{data['UTC']}), дата {data['date_created']}\n\n"
+        f"🔸 Мой курс: {data['trader_rate']} ({data['trader_fee']}%)\n"
+        f"🔸 Курс биржи: {data['exchange_rate']}"
     )
-    
-    try:
-        await bot.send_message(
-            chat_id=user_id, 
-            text=message, 
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
-        logger.info(f"Notification sent to user {user_id} for order {order_id}")
-    except Exception as e:
-        logger.error(f"Failed to send notification to user {user_id}: {e}")
+
+    await bot.send_message(chat_id=user_id, text=message, parse_mode=ParseMode.HTML)
+    logger.info(f"Notification sent to user {user_id} for order {data['order_id']}")
+
 
 # Handle order details button
 async def order_details_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

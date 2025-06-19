@@ -155,6 +155,13 @@ def get_user_stats():
             "admin": admin_users,
             "notifications_enabled": notifications_enabled
         }
+def get_user_id_by_platform_username(platform_username: str):
+    conn = sqlite3.connect("users.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT telegram_id FROM users WHERE platform_username = ?", (platform_username,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else None
 
 # Функция для добавления тестовых пользователей
 def add_test_users():
