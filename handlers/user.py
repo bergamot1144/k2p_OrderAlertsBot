@@ -2,6 +2,7 @@
 import html
 import requests
 import re
+from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes, ConversationHandler
 from telegram.helpers import escape_markdown
@@ -642,7 +643,19 @@ async def send_order_notification(bot, user_id, data: dict):
     if not get_notification_status(user_id):
         logger.info(f"Notification not sent to user {user_id} (notifications disabled)")
         return
-
+    # Преобразуем дату создания
+    try:
+        dt_format = "%d.%m.%Y %H:%M:%S"
+        created_dt = datetime.strptime(data["date_created"], dt_format)
+        closing_dt = created_dt + timedelta(minutes=int(data["timer"]))
+        created_time_str = created_dt.strftime("%H:%M:%S")
+        created_date_str = created_dt.strftime("%d.%m.%Y")
+        closing_time_str = closing_dt.strftime("%H:%M:%S")
+        closing_date_str = closing_dt.strftime("%d.%m.%Y")
+    except Exception as e:
+        created_time_str = data["date_created"]
+        closing_time_str = "ошибка времени"
+        closing_date_str = "ошибка даты"
     message = (
         f"🔹 Сумма, фиат: {data['fiat_amount']} {data['currency']}\n"
         f"🔹 Реквизиты: {data['requisites_name']} "
@@ -650,8 +663,8 @@ async def send_order_notification(bot, user_id, data: dict):
         f"{data.get('requisites_cardholderName', '')} {data.get('requisites_cardholderSurname', '')[0]}.\n"
         f"🔹 Способ оплаты: {data['type']}\n\n"
         f"▫️ ID сделки: {data['order_id']}\n"
-        f"▫️ Создана: время {data['date_created']} (UTC+{data['UTC']}), дата {data['date_created']}\n"
-        f"▫️ Время закрытия: время+{data['timer']} минут {data['date_created']} (UTC+{data['UTC']}), дата {data['date_created']}\n\n"
+        f"▫️ Создана: время {created_time_str} (UTC{data['UTC']}), дата {created_date_str}\n"
+        f"▫️ Время закрытия: {closing_time_str} (UTC{data['UTC']}), дата {closing_date_str}\n\n"
         f"🔸 Мой курс: {data['trader_rate']} ({data['trader_fee']}%)\n"
         f"🔸 Курс биржи: {data['exchange_rate']}"
     )
