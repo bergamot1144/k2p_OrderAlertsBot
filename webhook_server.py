@@ -5,7 +5,7 @@ from database import (
     get_order_notification_status,
     get_appeal_notification_status,
 )
-from handlers.user import send_order_notification
+from handlers.user import send_platform_notification
 import os
 import logging
 from config import BOT_TOKEN as API_TOKEN
@@ -33,12 +33,20 @@ async def new_order(request: Request):
 
     user_id = user  # предполагается, что user = Telegram ID
 
-    if not get_order_notification_status(user_id):
+    status = data.get("status")
+
+    if status == "order" and not get_order_notification_status(user_id):
         logger.info(f"Order notifications disabled for user {user_id}")
         return {"status": "notifications_off"}
 
+    if status == "appeal" and not get_appeal_notification_status(user_id):
+        logger.info(f"Appeal notifications disabled for user {user_id}")
+    
+
+        return {"status": "notifications_off"}
+
     try:
-        await send_order_notification(bot, user_id, data)
+        await send_platform_notification(bot, user_id, data)
         return {"status": "sent"}
     except Exception as e:
         logger.error(f"Failed to send notification: {e}")

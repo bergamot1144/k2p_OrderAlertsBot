@@ -707,7 +707,26 @@ async def handle_info_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+# 👇 This function is called externally (via webhook from the platform) when access is unblocked
+async def unlock_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # This can be connected via webhook or scheduler
+    user_id = update.message.chat_id
+    logger.info(f"Account unlocked for user {user_id}")
+    
+    # Update user state
+    user_states[user_id] = USERNAME
 
+    await context.bot.send_message(
+        chat_id=user_id,
+        text="🔓 Ваш аккаунт был разблокирован. Используйте /start для продолжения"
+    )
+
+    await context.bot.send_message(
+        chat_id=user_id,
+        text="👤 Введите логин Трейдера:"
+    )
+
+    return USERNAME
 
 
 # Cancel
@@ -741,61 +760,125 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # 👇 This function is called externally (via webhook from the platform) when access is unblocked
-async def unlock_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # This can be connected via webhook or scheduler
-    user_id = update.message.chat_id
-    logger.info(f"Account unlocked for user {user_id}")
-    
-    # Update user state
-    user_states[user_id] = USERNAME
-    
-    await context.bot.send_message(
-        chat_id=user_id, 
-        text="🔓 Ваш аккаунт был разблокирован. Используйте /start для продолжения"
-    )
-    
-    await context.bot.send_message(
-        chat_id=user_id, 
-        text="👤 Введите логин Трейдера:"
-    )
-    
-    return USERNAME
-
-# Function to handle incoming order notifications (called by your API)
-async def send_order_notification(bot, user_id, data: dict):
+async def send_platform_notification(bot, user_id, data: dict):
+    """Send order or appeal alerts to the user based on payload."""
     from telegram.constants import ParseMode
 
-    if not get_order_notification_status(user_id):
-        logger.info(f"Notification not sent to user {user_id} (order notifications disabled)")
-        return
-    # Преобразуем дату создания
-    try:
-        dt_format = "%d.%m.%Y %H:%M:%S"
-        created_dt = datetime.strptime(data["date_created"], dt_format)
-        closing_dt = created_dt + timedelta(minutes=int(data["timer"]))
-        created_time_str = created_dt.strftime("%H:%M:%S")
-        created_date_str = created_dt.strftime("%d.%m.%Y")
-        closing_time_str = closing_dt.strftime("%H:%M:%S")
-        closing_date_str = closing_dt.strftime("%d.%m.%Y")
-    except Exception as e:
-        created_time_str = data["date_created"]
-        closing_time_str = "ошибка времени"
-        closing_date_str = "ошибка даты"
-    message = (
-        f"🔹 Сумма, фиат: {data['fiat_amount']} {data['currency']}\n"
-        f"🔹 Реквизиты: {data['requisites_name']} "
-        f"{str(data.get('requisites_cardNumber', ''))[-4:]}, "
-        f"{data.get('requisites_cardholderName', '')} {data.get('requisites_cardholderSurname', '')[0]}.\n"
-        f"🔹 Способ оплаты: {data['type']}\n\n"
-        f"▫️ ID сделки: {data['order_id']}\n"
-        f"▫️ Создана: время {created_time_str} (UTC+{data['UTC']}), дата {created_date_str}\n"
-        f"▫️ Время закрытия: {closing_time_str} (UTC+{data['UTC']}), дата {closing_date_str}\n\n"
-        f"🔸 Мой курс: {data['trader_rate']} ({data['trader_fee']}%)\n"
-        f"🔸 Курс биржи: {data['exchange_rate']}"
-    )
+    status = data.get("status")
 
-    await bot.send_message(chat_id=user_id, text=message, parse_mode=ParseMode.HTML)
-    logger.info(f"Notification sent to user {user_id} for order {data['order_id']}")
+    if status == "order":
+        if not get_order_notification_status(user_id):
+            logger.info(
+                f"Notification not sent to user {user_id} (order notifications disabled)"
+            )
+            return
+        created_key = "order_date_created"
+        timer_key = "order_timer"
+        title = "💸 Новый ордер"
+    elif status == "appeal":
+        if not get_appeal_notification_status(user_id):
+            logger.info(
+                f"Notification not sent to user {user_id} (appeal notifications disabled)"
+            )
+            return
+        created_key = "appeal_date_created"
+        timer_key = "appeal_timer"
+        title = "⚠️ Новая апелляция"
+    else:
+        logger.warning(f"Unknown notification status: {status}")
+        return
+
+    dt_format = "%d.%m.%Y %H:%M:%S"
+    created_raw = data.get(created_key, "")
+    created_dt = None
+    closing_dt = None
+    try:
+        created_dt = datetime.strptime(created_raw, dt_format)
+        closing_dt = created_dt + timedelta(minutes=int(data.get(timer_key, 0)))
+    except Exception as e:
+        logger.error(f"Date parse error: {e}")
+
+    def fmt(dt: datetime | None, part: str) -> str:
+        if not dt:
+            return "ошибка" if part == "time" else "ошибка"
+        return dt.strftime("%H:%M:%S") if part == "time" else dt.strftime("%d.%m.%Y")
+
+    created_time_str = fmt(created_dt, "time")
+    created_date_str = fmt(created_dt, "date")
+    closing_time_str = fmt(closing_dt, "time")
+    closing_date_str = fmt(closing_dt, "date")
+
+    pay_type = data.get("type", "")
+    card_last = str(data.get("requisites_cardNumber", ""))[-4:]
+    iban_last = str(data.get("requisites_ibanAcc", ""))[-4:]
+    name = data.get("requisites_name", "")
+    holder_name = data.get("requisites_cardholderName", "")
+    holder_surname = data.get("requisites_cardholderSurname", "")
+    holder_initial = holder_surname[:1]
+
+    if status == "order":
+        pay_display = pay_type.upper()
+        if pay_type == "iban":
+            req_str = (
+                f"{name} {pay_display} {holder_surname} "
+                f"UA***{iban_last}, {holder_name} {holder_initial}."
+            )
+        else:
+            req_str = (
+                f"{name} {holder_surname} *{card_last}, "
+                f"{holder_name} {holder_initial}."
+            )
+
+        msg = (
+            f"{title}\n\n"
+            f"🔹 Сумма, фиат: {data.get('fiat_amount')} {data.get('currency')}\n"
+            f"🔹 Реквизиты: {req_str}\n"
+            f"🔹 Способ оплаты: {pay_display}\n\n"
+            f"▫️ ID ордера: {data.get('order_id')}\n"
+            f"▫️ Ордер создан {created_time_str} (UTC+{data.get('UTC')}), {created_date_str}\n"
+            f"▫️ Ордер будет закрыт {closing_time_str} (UTC+{data.get('UTC')}), {closing_date_str}\n\n"
+            f"🔹 Мой курс: {data.get('trader_rate')} ({data.get('trader_fee')}%)\n"
+            f"🔹 Курс биржи: {data.get('exchange_rate')}"
+        )
+    else:  # appeal
+        pay_display = pay_type.upper()
+        if pay_type == "iban":
+            req_str = (
+                f"{name} {pay_display} {holder_surname} "
+                f"UA***{iban_last}, {holder_name} {holder_initial}."
+            )
+        else:
+            req_str = (
+                f"{name} {holder_surname} *{card_last}, "
+                f"{holder_name} {holder_initial}."
+            )
+
+        order_created_dt = None
+        try:
+            order_created_dt = datetime.strptime(
+                data.get("order_date_created", ""), dt_format
+            )
+        except Exception:
+            pass
+
+        order_created_time = fmt(order_created_dt, "time")
+        order_created_date = fmt(order_created_dt, "date")
+
+        msg = (
+            f"{title}\n\n"
+            f"🔸 Сумма, фиат: {data.get('fiat_amount')} {data.get('currency')}\n"
+            f"🔸 Реквизиты: {req_str}\n"
+            f"🔸 Способ оплаты: {pay_display}\n\n"
+            f"▫️ ID ордера: {data.get('order_id')}\n"
+            f"▫️ Ордер создан {order_created_time} (UTC+{data.get('UTC')}), {order_created_date}\n"
+            f"▫️ Апелляция создана {created_time_str} (UTC+{data.get('UTC')}), {created_date_str}\n"
+            f"▫️ Апелляция будет закрыта {closing_time_str} (UTC+{data.get('UTC')}), {closing_date_str}"
+        )
+
+    await bot.send_message(chat_id=user_id, text=msg, parse_mode=ParseMode.HTML)
+    logger.info(
+        f"Notification sent to user {user_id} for {status} {data.get('order_id')}"
+    )
 
 
 # Handle order details button
