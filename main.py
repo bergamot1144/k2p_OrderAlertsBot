@@ -6,11 +6,12 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     ConversationHandler, filters, CallbackQueryHandler
 )
-from database import init_db
+from database import init_db, get_active_user_sessions, delete_user
 from config import (
     BOT_TOKEN, USERNAME, PASSWORD, MAIN_MENU, PROFILE_VIEW,
     INFO_VIEW, LOGOUT_CONFIRM, ADMIN_MENU, ADMIN_BROADCAST,
-    ADMIN_USER_LIST, WAITING_INFO_TEXT, CANCEL_LOGOUT, BAN_USER_PREFIX
+    ADMIN_USER_LIST, WAITING_INFO_TEXT, CANCEL_LOGOUT, BAN_USER_PREFIX,
+    AUTH_ENDPOINT
 )
 from handlers.user import (
     start, receive_username, receive_password, handle_main_menu,
@@ -24,6 +25,8 @@ from handlers.admin import (
 )
 from webhook_server import app as fastapi_app  # FastAPI сервер
 
+from handlers.user import user_states
+import requests
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -34,6 +37,34 @@ logger = logging.getLogger(__name__)
 # Патч для Windows + asyncio
 nest_asyncio.apply()
 
+async def validate_sessions_task(app):
+    """Periodically confirm active sessions with the platform."""
+    while True:
+        users = get_active_user_sessions()
+        for telegram_id, tg_username, platform_username in users:
+            payload = {"username": platform_username, "tg_username": tg_username}
+            try:
+                response = requests.post(AUTH_ENDPOINT, json=payload, timeout=10)
+                data = response.json()
+                if response.status_code == 401 or not data.get("Success"):
+                    delete_user(telegram_id)
+                    user_states.pop(telegram_id, None)
+                    try:
+                        await app.bot.send_message(
+                            chat_id=telegram_id,
+                            text=(
+                                "⚠️ *Сессия истекла*\n\n"
+                                "Пожалуйста, авторизуйтесь снова, используя команду /start"
+                            ),
+                            parse_mode="Markdown",
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to notify user {telegram_id} about session expiration: {e}"
+                        )
+            except Exception as e:
+                logger.error(f"Error validating session for user {telegram_id}: {e}")
+        await asyncio.sleep(86400)
 
 async def run_all():
     # Инициализация базы данных
@@ -82,12 +113,13 @@ async def run_all():
 
     # Telegram и FastAPI — параллельно
     telegram_task = asyncio.create_task(app.run_polling())
-
+    validation_task = asyncio.create_task(validate_sessions_task(app))
     fastapi_config = Config(app=fastapi_app, host="0.0.0.0", port=8000, log_level="info", loop="asyncio")
     fastapi_server = Server(fastapi_config)
 
     await asyncio.gather(
         telegram_task,
+        validation_task,
         fastapi_server.serve()
     )
 

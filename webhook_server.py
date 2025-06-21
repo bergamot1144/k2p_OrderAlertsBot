@@ -1,6 +1,10 @@
 ﻿from fastapi import FastAPI, Request
 from telegram import Bot
-from database import get_user_id_by_platform_username, get_notification_status
+from database import (
+    get_user_id_by_platform_username,
+    get_order_notification_status,
+    get_appeal_notification_status,
+)
 from handlers.user import send_order_notification
 import os
 import logging
@@ -29,8 +33,8 @@ async def new_order(request: Request):
 
     user_id = user  # предполагается, что user = Telegram ID
 
-    if not get_notification_status(user_id):
-        logger.info(f"Notifications disabled for user {user_id}")
+    if not get_order_notification_status(user_id):
+        logger.info(f"Order notifications disabled for user {user_id}")
         return {"status": "notifications_off"}
 
     try:

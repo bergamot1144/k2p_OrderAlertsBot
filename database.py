@@ -14,6 +14,7 @@ def init_db():
                 tg_username TEXT,
                 platform_username TEXT,
                 notifications_enabled INTEGER DEFAULT 0,
+                appeal_notifications_enabled INTEGER DEFAULT 0,
                 role TEXT DEFAULT 'user',
                 banned INTEGER DEFAULT 0
             )
@@ -25,6 +26,12 @@ def init_db():
             pass
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute(
+                "ALTER TABLE users ADD COLUMN appeal_notifications_enabled INTEGER DEFAULT 0"
+            )
         except sqlite3.OperationalError:
             pass
         conn.commit()
@@ -91,18 +98,48 @@ def promote_to_admin(telegram_id):
         cursor.execute("UPDATE users SET role = 'admin' WHERE telegram_id = ?", (telegram_id,))
         conn.commit()
 
-def set_notification_status(telegram_id, status):
+def set_order_notification_status(telegram_id, status):
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute("UPDATE users SET notifications_enabled = ? WHERE telegram_id = ?", (1 if status else 0, telegram_id))
+        cursor.execute(
+            "UPDATE users SET notifications_enabled = ? WHERE telegram_id = ?",
+            (1 if status else 0, telegram_id),
+        )
         conn.commit()
 
-def get_notification_status(telegram_id):
+def get_order_notification_status(telegram_id):
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT notifications_enabled FROM users WHERE telegram_id = ?", (telegram_id,))
+        cursor.execute(
+            "SELECT notifications_enabled FROM users WHERE telegram_id = ?",
+            (telegram_id,),
+        )
         row = cursor.fetchone()
         return bool(row[0]) if row else False
+
+def set_appeal_notification_status(telegram_id, status):
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET appeal_notifications_enabled = ? WHERE telegram_id = ?",
+            (1 if status else 0, telegram_id),
+        )
+        conn.commit()
+
+def get_appeal_notification_status(telegram_id):
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT appeal_notifications_enabled FROM users WHERE telegram_id = ?",
+            (telegram_id,),
+        )
+        row = cursor.fetchone()
+        return bool(row[0]) if row else False
+
+def get_notification_status(telegram_id):
+    """Legacy wrapper for order notifications."""
+    return get_order_notification_status(telegram_id)
+
 
 def is_user_banned(telegram_id):
     with sqlite3.connect(DB_NAME) as conn:
@@ -144,17 +181,31 @@ def get_user_stats():
         cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'")
         admin_users = cursor.fetchone()[0]
         
-        # Users with notifications enabled
+       # Users with order notifications enabled
         cursor.execute("SELECT COUNT(*) FROM users WHERE notifications_enabled = 1")
-        notifications_enabled = cursor.fetchone()[0]
+        order_enabled = cursor.fetchone()[0]
+
+        # Users with appeal notifications enabled
+        cursor.execute("SELECT COUNT(*) FROM users WHERE appeal_notifications_enabled = 1")
+        appeal_enabled = cursor.fetchone()[0]
         
         return {
             "total": total_users,
             "active": active_users,
             "banned": banned_users,
             "admin": admin_users,
-            "notifications_enabled": notifications_enabled
+            "order_notifications_enabled": order_enabled,
+            "appeal_notifications_enabled": appeal_enabled
         }
+def get_active_user_sessions():
+    """Return list of active (not banned) user sessions."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT telegram_id, tg_username, platform_username FROM users WHERE banned = 0"
+        )
+        return cursor.fetchall()
+
 def get_user_id_by_platform_username(platform_username: str):
     conn = sqlite3.connect("users.db")
     cursor = conn.cursor()

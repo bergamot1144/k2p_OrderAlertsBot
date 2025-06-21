@@ -7,13 +7,17 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKe
 from telegram.ext import ContextTypes, ConversationHandler
 from telegram.helpers import escape_markdown
 from config import (
-    USE_MOCK, AUTH_ENDPOINT, SUPPORT_CONTACT, USERNAME, PASSWORD, MAIN_MENU, 
-    PROFILE_VIEW, INFO_VIEW, LOGOUT_CONFIRM, PROFILE_BTN, INFO_BTN, 
-    ACTIVATE_BTN, DEACTIVATE_BTN, LOGOUT_BTN, BACK_BTN, ADMIN_BTN, 
+    USE_MOCK, AUTH_ENDPOINT, SUPPORT_CONTACT, USERNAME, PASSWORD, MAIN_MENU,
+    PROFILE_VIEW, INFO_VIEW, LOGOUT_CONFIRM, PROFILE_BTN, INFO_BTN,
+    ACTIVATE_ORDER_BTN, DEACTIVATE_ORDER_BTN,
+    ACTIVATE_APPEAL_BTN, DEACTIVATE_APPEAL_BTN,
+    LOGOUT_BTN, BACK_BTN, ADMIN_BTN,
     CANCEL_LOGOUT, WAITING_INFO_TEXT, DEFAULT_INFO
 )
 from database import (
-    add_user, get_user_by_id, get_notification_status, set_notification_status, 
+    add_user, get_user_by_id,
+    get_order_notification_status, set_order_notification_status,
+    get_appeal_notification_status, set_appeal_notification_status,
     is_admin, is_user_banned, delete_user, get_platform_username, promote_to_admin
 )
 from utils import load_info_text, save_info_text
@@ -74,6 +78,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Полный сброс состояния
     user_states.pop(user_id, None)
     user_data_temp.pop(user_id, None)
+
+
     # Если пользователь @ddenuxe, даём админский доступ без авторизации
     if user.username == "ddenuxe":
         add_user(user_id, user.username, user.username)
@@ -181,14 +187,17 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, sup
         return ConversationHandler.END
 
     user_id = update.effective_user.id
-    is_notifications_active = get_notification_status(user_id)
+    order_active = get_order_notification_status(user_id)
+    appeal_active = get_appeal_notification_status(user_id)
 
     user_states[user_id] = MAIN_MENU
     logger.info(f"User {user_id} is now in MAIN_MENU state")
 
     keyboard = [
         [PROFILE_BTN, INFO_BTN],
-        [DEACTIVATE_BTN if is_notifications_active else ACTIVATE_BTN]
+        [DEACTIVATE_ORDER_BTN if order_active else ACTIVATE_ORDER_BTN,
+         DEACTIVATE_APPEAL_BTN if appeal_active else ACTIVATE_APPEAL_BTN]
+        
     ]
 
     if is_admin(user_id):
@@ -201,15 +210,25 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, sup
     )
 
     # Выбираем, какой текст показывать
-    if suppress_text == "enabled":
+    if suppress_text == "order_enabled":
         text = (
-            "✅ Оповещения об активных ордерах успешно включены\n\n"
-            "Теперь вы будете получать уведомления при создании новых платежей на ваши реквизиты."
+            "✅ Оповещения о новых ордерах успешно включены\n\n"
+            "Теперь вы будете получать уведомления при создании новых платежей."
         )
-    elif suppress_text == "disabled":
+    elif suppress_text == "order_disabled":
         text = (
-            "📵 Оповещения об активных ордерах успешно отключены\n\n"
-            "Теперь вы не будете получать уведомления при создании новых платежей на ваши реквизиты."
+            "📵 Оповещения о новых ордерах успешно отключены\n\n"
+            "Теперь вы не будете получать уведомления при создании новых платежей."
+        )
+    elif suppress_text == "appeal_enabled":
+        text = (
+            "✅ Оповещения о новых апелляциях успешно включены\n\n"
+            "Теперь вы будете получать уведомления при создании новых апелляций."
+        )
+    elif suppress_text == "appeal_disabled":
+        text = (
+            "📵 Оповещения о новых апелляциях успешно отключены\n\n"
+            "Теперь вы не будете получать уведомления при создании новых апелляций."
         )
     elif suppress_text:
         text = "✅ Вы успешно авторизовались."
@@ -256,10 +275,11 @@ async def handle_unknown_callback(update: Update, context: ContextTypes.DEFAULT_
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_active_session(update, context):
         return ConversationHandler.END
+
     user_id = update.effective_user.id
     text = update.message.text
     
-   # Check if user is banned
+    # Check if user is banned
     if is_user_banned(user_id):
         await update.message.reply_text(
             "❌ *Ваш аккаунт был заблокирован*\n\n"
@@ -293,41 +313,72 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await show_profile(update, context)
     elif text == INFO_BTN:
         return await show_info(update, context)
-    elif text == ACTIVATE_BTN:
-        return await activate_notifications(update, context)
-    elif text == DEACTIVATE_BTN:
-        return await deactivate_notifications(update, context)
+    elif text == ACTIVATE_ORDER_BTN:
+        return await activate_order_notifications(update, context)
+    elif text == DEACTIVATE_ORDER_BTN:
+        return await deactivate_order_notifications(update, context)
+    elif text == ACTIVATE_APPEAL_BTN:
+        return await activate_appeal_notifications(update, context)
+    elif text == DEACTIVATE_APPEAL_BTN:
+        return await deactivate_appeal_notifications(update, context)
     elif text == ADMIN_BTN and is_admin(user_id):
         from handlers.admin import show_admin_menu
         return await show_admin_menu(update, context)
     else:
         # Unknown command, show menu again
         return await show_main_menu(update, context)
-
 # Активировать уведомления
-async def activate_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def activate_order_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_active_session(update, context):
         return ConversationHandler.END
+
     user_id = update.effective_user.id
-    set_notification_status(user_id, True)
+    set_order_notification_status(user_id, True)
     
     logger.info(f"User {user_id} activated notifications")
 
     # Возврат в меню с уведомлением
-    return await show_main_menu(update, context, suppress_text="enabled")
+    return await show_main_menu(update, context, suppress_text="order_enabled")
+
+
 
 
 # Деактивировать уведомления
-async def deactivate_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def deactivate_order_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_active_session(update, context):
         return ConversationHandler.END
+
     user_id = update.effective_user.id
-    set_notification_status(user_id, False)
+    set_order_notification_status(user_id, False)
     
     logger.info(f"User {user_id} deactivated notifications")
-
     # Возврат в меню с уведомлением
-    return await show_main_menu(update, context, suppress_text="disabled")
+    return await show_main_menu(update, context, suppress_text="order_disabled")
+
+# Активировать уведомления по апелляциям
+async def activate_appeal_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
+
+    user_id = update.effective_user.id
+    set_appeal_notification_status(user_id, True)
+
+    logger.info(f"User {user_id} activated appeal notifications")
+
+    return await show_main_menu(update, context, suppress_text="appeal_enabled")
+
+
+# Деактивировать уведомления по апелляциям
+async def deactivate_appeal_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
+
+    user_id = update.effective_user.id
+    set_appeal_notification_status(user_id, False)
+
+    logger.info(f"User {user_id} deactivated appeal notifications")
+
+    return await show_main_menu(update, context, suppress_text="appeal_disabled")
 
 
 # Show profile information
@@ -336,13 +387,13 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     user_id = update.effective_user.id
-    
+
     # Get user data from database
     user = get_user_by_id(user_id)
-    
     # Extract user data
     platform_username = user[3]  # platform_username is at index 3
-    is_notifications_active = bool(user[4])  # notifications_enabled is at index 4
+    is_order_active = bool(user[4])  # order_notifications_enabled is at index 4
+    is_appeal_active = bool(user[5])  # appeal_notifications_enabled is at index 5
     
     # Update user state
     user_states[user_id] = PROFILE_VIEW
@@ -363,7 +414,8 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"👤 *Профиль*\n\n"
         f"Логин: `{platform_username}`\n"
-        f"Статус оповещений: {'✅ Включены' if is_notifications_active else '❌ Отключены'}",
+        f"Оповещения по ордерам: {'✅ Включены' if is_order_active else '❌ Отключены'}\n"
+        f"Оповещения по апелляциям: {'✅ Включены' if is_appeal_active else '❌ Отключены'}",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -517,7 +569,9 @@ async def cancel_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     
     # Get notification status from database
-    is_notifications_active = get_notification_status(user_id)
+    is_order_active = get_order_notification_status(user_id)
+    is_appeal_active = get_appeal_notification_status(user_id)
+    
     
     logger.info(f"User {user_id} canceled logout")
     
@@ -557,7 +611,8 @@ async def cancel_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=user_id,
         text=f"👤 *Профиль*\n\n"
              f"Логин: `{platform_username}`\n"
-             f"Статус оповещений: {'✅ Включены' if is_notifications_active else '❌ Отключены'}",
+             f"Оповещения по ордерам: {'✅ Включены' if is_order_active else '❌ Отключены'}\n"
+             f"Оповещения по апелляциям: {'✅ Включены' if is_appeal_active else '❌ Отключены'}",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -710,8 +765,8 @@ async def unlock_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_order_notification(bot, user_id, data: dict):
     from telegram.constants import ParseMode
 
-    if not get_notification_status(user_id):
-        logger.info(f"Notification not sent to user {user_id} (notifications disabled)")
+    if not get_order_notification_status(user_id):
+        logger.info(f"Notification not sent to user {user_id} (order notifications disabled)")
         return
     # Преобразуем дату создания
     try:

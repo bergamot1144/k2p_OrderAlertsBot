@@ -400,7 +400,8 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Активных пользователей: {stats['active']}\n"
         f"Заблокированных пользователей: {stats['banned']}\n"
         f"Администраторов: {stats['admin']}\n"
-        f"Пользователей с включенными оповещениями: {stats['notifications_enabled']}",
+        f"Пользователей с ордерными оповещениями: {stats['order_notifications_enabled']}\n"
+        f"Пользователей с апелляционными оповещениями: {stats['appeal_notifications_enabled']}",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )

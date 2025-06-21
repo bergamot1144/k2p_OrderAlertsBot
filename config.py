@@ -48,8 +48,10 @@ DEFAULT_INFO = {
 # Menu button texts
 PROFILE_BTN = "👤 Профиль"
 INFO_BTN = "ℹ️ Информация"
-ACTIVATE_BTN = "🔔 Активировать оповещения"
-DEACTIVATE_BTN = "🔕 Деактивировать оповещения"
+ACTIVATE_ORDER_BTN = "💸 Оповещения по ордерам"
+DEACTIVATE_ORDER_BTN = "🚫 Деактивировать ордеры"
+ACTIVATE_APPEAL_BTN = "⚠️ Оповещения по апелляциям"
+DEACTIVATE_APPEAL_BTN = "🚫 Деактивировать апелляции"
 LOGOUT_BTN = "❌ Выйти из аккаунта"
 BACK_BTN = "◀️ Назад"
 ADMIN_BTN = "🔐 Админ-панель"
