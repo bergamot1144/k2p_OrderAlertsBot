@@ -4,6 +4,7 @@ from database import (
     get_user_id_by_platform_username,
     get_order_notification_status,
     get_appeal_notification_status,
+    is_user_authorized
 )
 from handlers.user import send_platform_notification
 import os
@@ -22,29 +23,23 @@ async def root():
 @app.post("/new_order")
 async def new_order(request: Request):
     data = await request.json()
-
     platform_username = data.get("username")  # username трейдера на платформе
-
     user = get_user_id_by_platform_username(platform_username)
-
     if not user:
         logger.warning(f"No user found for platform_username={platform_username}")
         return {"status": "no_user"}
-
     user_id = user  # предполагается, что user = Telegram ID
 
+    if not is_user_authorized(user_id):
+        logger.warning(f"User {user_id} is not authorized to receive notifications")
+        return {"status": "unauthorized"}
     status = data.get("status")
-
     if status == "order" and not get_order_notification_status(user_id):
         logger.info(f"Order notifications disabled for user {user_id}")
         return {"status": "notifications_off"}
-
     if status == "appeal" and not get_appeal_notification_status(user_id):
         logger.info(f"Appeal notifications disabled for user {user_id}")
-    
-
         return {"status": "notifications_off"}
-
     try:
         await send_platform_notification(bot, user_id, data)
         return {"status": "sent"}

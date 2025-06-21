@@ -207,12 +207,32 @@ def get_active_user_sessions():
         return cursor.fetchall()
 
 def get_user_id_by_platform_username(platform_username: str):
-    conn = sqlite3.connect("users.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT telegram_id FROM users WHERE platform_username = ?", (platform_username,))
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row else None
+     """Return Telegram ID for the platform username if the user is active."""
+     with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT telegram_id, banned FROM users WHERE platform_username = ?",
+                (platform_username,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            telegram_id, banned = row
+            if banned:
+                return None
+            return telegram_id
+
+
+def is_user_authorized(telegram_id: int) -> bool:
+    """Check if the user exists and is not banned."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT banned FROM users WHERE telegram_id = ?",
+            (telegram_id,),
+        )
+        row = cursor.fetchone()
+        return row is not None and row[0] == 0
 
 # Функция для добавления тестовых пользователей
 def add_test_users():
