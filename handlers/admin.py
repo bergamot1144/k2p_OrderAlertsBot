@@ -16,12 +16,12 @@ from config import DEFAULT_INFO, INFO_VIEW
 from states import WAITING_INFO_TEXT
 from utils import load_info_text
 from handlers.session import user_states
-from handlers.user import show_info, ensure_active_session, show_info, show_main_menu
+from handlers.user import ensure_active_session, show_info, show_main_menu
 
 logger = logging.getLogger(__name__)
 
 # Import user_handlers at the end of the file to avoid circular imports
-from handlers.user import user_states, show_main_menu
+from handlers.user import user_states
 
 # Show admin menu
 async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -63,8 +63,10 @@ async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
+
     if not await ensure_active_session(update, context):
         return ConversationHandler.END
+
     # Check if user is admin
     if not is_admin(user_id):
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
@@ -342,11 +344,28 @@ async def handle_ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         unban_user_by_id(user_id)
         
         await query.edit_message_text(f"✅ Пользователь {user[2]} разблокирован.")
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="🔓 Ваш аккаунт был разблокирован. Вы снова можете пользоваться ботом."
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify user {user_id} about unban: {e}")
     else:
         # Ban user
         ban_user_by_id(user_id)
         
         await query.edit_message_text(f"🚫 Пользователь {user[2]} заблокирован.")
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=(
+                    "🚫 Ваш аккаунт был заблокирован. "
+                    f"По вопросам доступа к Боту можете обращаться к {SUPPORT_CONTACT}"
+                )
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify user {user_id} about ban: {e}")
     
     # Return to user list
     return await show_user_list(update, context)
