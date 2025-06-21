@@ -15,7 +15,8 @@ from config import (
 from handlers.user import (
     start, receive_username, receive_password, handle_main_menu,
     handle_profile_view, handle_info_view, handle_logout_confirmation,
-    cancel_logout, cancel, unlock_callback, order_details_callback
+    cancel_logout, cancel, unlock_callback, order_details_callback,
+    handle_unknown, handle_unknown_callback
 )
 from handlers.admin import (
     handle_admin_menu, handle_broadcast, handle_user_list,
@@ -74,6 +75,9 @@ async def run_all():
     app.add_handler(CallbackQueryHandler(handle_ban_user, pattern=f"^{BAN_USER_PREFIX}"))
     app.add_handler(CallbackQueryHandler(order_details_callback, pattern=r"^order_"))
 
+     # Fallback handlers to detect expired sessions after bot restarts
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_unknown))
+    app.add_handler(CallbackQueryHandler(handle_unknown_callback))
     logger.info("Запускается Telegram-бот и FastAPI сервер на порту 8000...")
 
     # Telegram и FastAPI — параллельно

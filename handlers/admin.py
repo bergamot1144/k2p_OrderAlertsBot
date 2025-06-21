@@ -16,7 +16,7 @@ from config import DEFAULT_INFO, INFO_VIEW
 from states import WAITING_INFO_TEXT
 from utils import load_info_text
 from handlers.session import user_states
-from handlers.user import is_admin, show_info
+from handlers.user import show_info, ensure_active_session, show_info, show_main_menu
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,8 @@ from handlers.user import user_states, show_main_menu
 # Show admin menu
 async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     # Check if user is admin
     if not is_admin(user_id):
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
@@ -62,7 +63,8 @@ async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
-    
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     # Check if user is admin
     if not is_admin(user_id):
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
@@ -100,7 +102,8 @@ async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Start broadcast
 async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     # Check if user is admin
     if not is_admin(user_id):
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
@@ -135,7 +138,8 @@ async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
-    
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     # Check if user is admin
     if not is_admin(user_id):
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
@@ -199,7 +203,8 @@ async def handle_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Show user list
 async def show_user_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     # Получаем message независимо от источника
     message = update.message or (update.callback_query and update.callback_query.message)
 
@@ -275,7 +280,8 @@ async def show_user_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_user_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
-    
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     # Check if user is admin
     if not is_admin(user_id):
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
@@ -308,7 +314,8 @@ async def handle_ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     admin_id = update.effective_user.id
-    
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     # Check if user is admin
     if not is_admin(admin_id):
         await query.edit_message_text("⛔ У вас нет прав администратора для выполнения этой команды.")
@@ -347,7 +354,8 @@ async def handle_ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Show statistics
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     # Check if user is admin
     if not is_admin(user_id):
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
@@ -386,7 +394,8 @@ async def info_edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     tg_username = user.username
-
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     # Разрешаем доступ только @ddenuxe
     if tg_username != "ddenuxe":
     
@@ -413,7 +422,8 @@ async def info_edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def receive_info_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     new_text = update.message.text
-    
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     # Check if user is admin
     if not is_admin(user_id):
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")

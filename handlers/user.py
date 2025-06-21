@@ -25,6 +25,29 @@ user_data_temp = {}
 password_attempts = {}
 user_states = {}  # Track user states
 
+# Helper to ensure the user session is active
+async def ensure_active_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    user_id = update.effective_user.id
+    user = get_user_by_id(user_id)
+
+    if not user or user_id not in user_states:
+        text = (
+            "⚠️ *Сессия истекла*\n\n"
+            "Пожалуйста, авторизуйтесь снова, используя команду /start"
+        )
+        if getattr(update, "message", None):
+            await update.message.reply_text(text, parse_mode='Markdown', reply_markup=ReplyKeyboardRemove())
+        elif getattr(update, "callback_query", None):
+            await update.callback_query.message.reply_text(text, parse_mode='Markdown', reply_markup=ReplyKeyboardRemove())
+        else:
+            await context.bot.send_message(chat_id=user_id, text=text, parse_mode='Markdown', reply_markup=ReplyKeyboardRemove())
+
+        user_states.pop(user_id, None)
+        user_data_temp.pop(user_id, None)
+        return False
+
+    return True
+
 # Функция для экранирования Markdown-символов
 def escape_markdown(text: str) -> str:
     return re.sub(r'([*_`\[\]()])', r'\\\1', text)
@@ -138,6 +161,9 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Show main menu with keyboard buttons
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, suppress_text: str | bool = False):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
+
     user_id = update.effective_user.id
     is_notifications_active = get_notification_status(user_id)
 
@@ -192,11 +218,28 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, sup
 
     return MAIN_MENU
 
+# Fallback handler for unexpected text messages
+async def handle_unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
 
+    # For authenticated users, just show the main menu
+    return await show_main_menu(update, context)
+
+
+# Fallback handler for unexpected callback queries
+async def handle_unknown_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
+
+    await update.callback_query.answer()
+    return await show_main_menu(update, context)
 
 
 # Handle main menu button presses
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     user_id = update.effective_user.id
     text = update.message.text
     
@@ -247,6 +290,8 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Активировать уведомления
 async def activate_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     user_id = update.effective_user.id
     set_notification_status(user_id, True)
     
@@ -258,6 +303,8 @@ async def activate_notifications(update: Update, context: ContextTypes.DEFAULT_T
 
 # Деактивировать уведомления
 async def deactivate_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     user_id = update.effective_user.id
     set_notification_status(user_id, False)
     
@@ -269,18 +316,13 @@ async def deactivate_notifications(update: Update, context: ContextTypes.DEFAULT
 
 # Show profile information
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
+
     user_id = update.effective_user.id
     
     # Get user data from database
     user = get_user_by_id(user_id)
-    if not user:
-        await update.message.reply_text(
-            "⚠️ *Сессия истекла*\n\n"
-            "Пожалуйста, авторизуйтесь снова, используя команду /start",
-            parse_mode='Markdown',
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return ConversationHandler.END
     
     # Extract user data
     platform_username = user[3]  # platform_username is at index 3
@@ -314,6 +356,8 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Handle profile view buttons
 async def handle_profile_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     user_id = update.effective_user.id
     text = update.message.text
     
@@ -343,6 +387,8 @@ async def handle_profile_view(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # Logout confirmation
 async def logout_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     user_id = update.effective_user.id
     
     # Get platform username from database
@@ -385,6 +431,8 @@ async def logout_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # Handle logout confirmation
 async def handle_logout_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     user_id = update.effective_user.id
     entered_username = update.message.text
     correct_username = context.user_data.get("logout_username", "")
@@ -433,6 +481,8 @@ async def handle_logout_confirmation(update: Update, context: ContextTypes.DEFAU
 
 # Handle cancel logout button
 async def cancel_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     query = update.callback_query
     await query.answer()
     
@@ -500,6 +550,8 @@ async def cancel_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Show information
 async def show_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     user_id = update.effective_user.id
 
     # Обновляем состояние
@@ -537,6 +589,8 @@ async def show_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_info_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
     user_id = update.effective_user.id
     text = update.message.text
     
