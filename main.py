@@ -15,13 +15,14 @@ from config import (
 )
 from handlers.user import (
     start, receive_username, receive_password, handle_main_menu,
-    handle_profile_view, handle_info_view, handle_logout_confirmation,
+    handle_profile_view, handle_logout_confirmation,
     cancel_logout, cancel, unlock_callback, order_details_callback,
     handle_unknown, handle_unknown_callback
 )
 from handlers.admin import (
     handle_admin_menu, handle_broadcast, handle_user_list,
-    handle_ban_user, info_edit_command, receive_info_text
+    handle_ban_user, info_edit_command, receive_info_text,
+    admin_panel_command
 )
 from webhook_server import app as fastapi_app  # FastAPI сервер
 
@@ -74,13 +75,7 @@ async def run_all():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # Хэндлеры
-    info_edit_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("infoedit", info_edit_command)],
-        states={
-            WAITING_INFO_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_info_text)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
+
 
     auth_conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -89,19 +84,23 @@ async def run_all():
             PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_password)],
             MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu)],
             PROFILE_VIEW: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_profile_view)],
-            INFO_VIEW: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_info_view)],
             LOGOUT_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_logout_confirmation)],
             ADMIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_admin_menu)],
             ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_broadcast)],
             ADMIN_USER_LIST: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_list)],
             WAITING_INFO_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_info_text)],
         },
-        fallbacks=[CommandHandler("start", start), CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("start", start),
+            CommandHandler("cancel", cancel),
+            CommandHandler("admin", admin_panel_command),
+        ],
     )
 
     app.add_handler(auth_conv_handler)
-    app.add_handler(info_edit_conv_handler)
+   
     app.add_handler(CommandHandler("unlock", unlock_callback))
+    app.add_handler(CommandHandler("admin", admin_panel_command))
     app.add_handler(CallbackQueryHandler(cancel_logout, pattern=f"^{CANCEL_LOGOUT}$"))
     app.add_handler(CallbackQueryHandler(handle_ban_user, pattern=f"^{BAN_USER_PREFIX}"))
     app.add_handler(CallbackQueryHandler(order_details_callback, pattern=r"^order_"))

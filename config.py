@@ -60,7 +60,7 @@ ADMIN_BTN = "🔐 Админ-панель"
 ADMIN_BROADCAST_BTN = "📢 Рассылка"
 ADMIN_USERS_BTN = "👥 Список пользователей"
 ADMIN_STATS_BTN = "📊 Статистика"
-# ADMIN_INFO_EDIT_BTN = "✏️ Изменить информацию"
+ADMIN_INFO_EDIT_BTN = "✏️ Изменить информацию"
 
 # Callback data constants
 CANCEL_LOGOUT = "cancel_logout"
