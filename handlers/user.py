@@ -13,7 +13,8 @@ from config import (
     ACTIVATE_ORDER_BTN, DEACTIVATE_ORDER_BTN,
     ACTIVATE_APPEAL_BTN, DEACTIVATE_APPEAL_BTN,
     LOGOUT_BTN, BACK_BTN, ADMIN_BTN,
-    CANCEL_LOGOUT, WAITING_INFO_TEXT, DEFAULT_INFO
+    CANCEL_LOGOUT, WAITING_INFO_TEXT, DEFAULT_INFO,
+    ADMIN_USERNAMES,
 )
 from database import (
     add_user, get_user_by_id,
@@ -81,8 +82,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data_temp.pop(user_id, None)
 
 
-    # Если пользователь @ddenuxe, админ-панель доступна без авторизации
-    if user.username == "ddenuxe":
+    # Если пользователь из списка ADMIN_USERNAMES, админ-панель доступна без авторизации
+    if user.username in ADMIN_USERNAMES:
         existing = get_user_by_id(user_id)
         if not existing:
             add_user(user_id, user.username, "")
@@ -152,8 +153,8 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             add_user(user_id, tg_username, actual_username)
 
-            # Только tg_username @ddenuxe получает роль админа
-            if tg_username == "ddenuxe":
+            # tg_username из ADMIN_USERNAMES получает роль администратора
+            if tg_username in ADMIN_USERNAMES:
                 promote_to_admin(user_id)
 
             return await show_main_menu(update, context, suppress_text=True)
@@ -242,7 +243,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, sup
     elif suppress_text:
         text = "✅ Вы успешно авторизовались."
     else:
-        text = "Главное меню"
+        text = "📁Главное меню"
 
     try:
         if hasattr(update, 'callback_query') and update.callback_query:

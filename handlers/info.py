@@ -2,7 +2,7 @@
 from telegram.ext import ContextTypes, ConversationHandler
 from telegram.helpers import escape_markdown
 
-from config import WAITING_INFO_TEXT, DEFAULT_INFO, INFO_VIEW
+from config import WAITING_INFO_TEXT, DEFAULT_INFO, INFO_VIEW, ADMIN_USERNAMES
 from database import is_admin
 from utils import load_info_text, save_info_text
 from handlers.user import show_info
@@ -16,8 +16,8 @@ async def info_edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     tg_username = user.username
 
-    # Только tg_username "ddenuxe" может редактировать
-    if tg_username != "ddenuxe":
+    # Только tg_username из ADMIN_USERNAMES может редактировать
+    if tg_username not in ADMIN_USERNAMES:
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
         return ConversationHandler.END
 

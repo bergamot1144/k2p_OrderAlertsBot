@@ -3,9 +3,10 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKe
 from telegram.ext import ContextTypes, ConversationHandler
 from telegram.helpers import escape_markdown
 from config import (
-    ADMIN_MENU, ADMIN_BROADCAST, ADMIN_USER_LIST, ADMIN_BROADCAST_BTN, 
-    ADMIN_USERS_BTN, ADMIN_STATS_BTN, BACK_BTN, SUPPORT_CONTACT, 
-    WAITING_INFO_TEXT, MAIN_MENU, BAN_USER_PREFIX,ADMIN_INFO_EDIT_BTN
+    ADMIN_MENU, ADMIN_BROADCAST, ADMIN_USER_LIST, ADMIN_BROADCAST_BTN,
+    ADMIN_USERS_BTN, ADMIN_STATS_BTN, BACK_BTN, SUPPORT_CONTACT,
+    WAITING_INFO_TEXT, MAIN_MENU, BAN_USER_PREFIX, ADMIN_INFO_EDIT_BTN,
+    ADMIN_USERNAMES,
 )
 from database import (
     is_admin, get_all_users, get_user_by_id, ban_user_by_id, unban_user_by_id,
@@ -22,12 +23,12 @@ logger = logging.getLogger(__name__)
 
 # Import user_handlers at the end of the file to avoid circular imports
 async def admin_panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Allow @ddenuxe to open the admin panel without prior authorization."""
+    """Allow configured admin usernames to open the panel without prior authorization."""
     user = update.effective_user
     tg_username = user.username
     user_id = user.id
 
-    if tg_username != "ddenuxe":
+    if tg_username not in ADMIN_USERNAMES:
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
         return ConversationHandler.END
 
@@ -56,7 +57,7 @@ async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [ADMIN_BROADCAST_BTN, ADMIN_USERS_BTN],
         [ADMIN_STATS_BTN, ADMIN_INFO_EDIT_BTN]
-        [BACK_BTN]
+        [BACK_BTN],
     ]
     
     reply_markup = ReplyKeyboardMarkup(
@@ -431,8 +432,8 @@ async def info_edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_username = user.username
     if not await ensure_active_session(update, context):
         return ConversationHandler.END
-    # Разрешаем доступ только @ddenuxe
-    if tg_username != "ddenuxe":
+    # Разрешаем доступ только администраторам из списка
+    if tg_username not in ADMIN_USERNAMES:
     
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
         return ConversationHandler.END

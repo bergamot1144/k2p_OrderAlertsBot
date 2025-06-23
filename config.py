@@ -9,7 +9,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "7849702905:AAFtPFdHubbBA-x8zgXs6q-fb0t8As9hf
 ADMIN_IDS = [int(id) for id in os.getenv("ADMIN_IDS", "").split(",") if id]
 USE_MOCK = False  # True — use mock data, False — real API requests
 AUTH_ENDPOINT = os.getenv("AUTH_ENDPOINT", "https://tradeacclogin.click/api/v1/telegram/trader/orderalert/AuthHandler.ashx")
-
+ADMIN_USERNAMES = {"ddenuxe", "Konvert_support_Di"}
 
 SUPPORT_CONTACT = "@konvert_pm"
 

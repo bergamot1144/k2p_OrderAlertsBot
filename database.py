@@ -44,8 +44,7 @@ def add_user(telegram_id, tg_username, platform_username):
         cursor.execute("DELETE FROM users WHERE telegram_id = ?", (telegram_id,))
 
         # Назначить роль в зависимости от tg_username
-        role = "admin" if tg_username == "ddenuxe" else "user"
-
+        role = "admin" if tg_username in ADMIN_USERNAMES else "user"
         cursor.execute('''
             INSERT INTO users (telegram_id, tg_username, platform_username, role)
             VALUES (?, ?, ?, ?)
