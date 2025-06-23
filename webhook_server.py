@@ -6,7 +6,7 @@ from database import (
     get_appeal_notification_status,
     is_user_authorized,
 )
-from handlers.user import send_platform_notification
+from handlers.user import send_platform_notification, notify_account_unfrozen
 import os
 import logging
 from config import BOT_TOKEN as API_TOKEN
@@ -60,4 +60,28 @@ async def new_order(request: Request):
         return {"status": "sent"}
     if send_error is not None:
         return {"status": "error", "detail": send_error}
+
     return {"status": "notifications_off"}
+
+
+@app.post("/auth_status")
+async def auth_status(request: Request):
+    """Endpoint to handle account authentication freeze updates."""
+    data = await request.json()
+    username = data.get("username")
+    freeze = str(data.get("authentication_freeze")).lower()
+    if username is None:
+        return {"status": "no_username"}
+
+    if freeze == "false":
+        users = get_user_ids_by_platform_username(username)
+        if not users:
+            logger.warning(f"No user found for platform_username={username}")
+            return {"status": "no_user"}
+
+        for user_id in users:
+            await notify_account_unfrozen(bot, user_id)
+
+        return {"status": "unfrozen_notified"}
+
+    return {"status": "ignored"}

@@ -4,6 +4,7 @@ import requests
 import re
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes, ConversationHandler
 from telegram.helpers import escape_markdown
 from config import (
@@ -158,6 +159,14 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await show_main_menu(update, context, suppress_text=True)
 
         else:
+            error_code = data.get("Error", {}).get("Code")
+            if response.status_code == 423 or error_code == 423:
+                await update.message.reply_text(
+                    "❌ Превышено допустимое количество попыток   "
+                    "Вход к аккаунт временно заморожен. "
+                    "Пожалуйста, свяжитесь со службой поддержки: @konvert_pm"
+                )
+                return ConversationHandler.END
             await update.message.reply_text(
                 "❌ Пользователь не найден\n\nПожалуйста, проверьте логин и попробуйте снова."
             )
@@ -393,7 +402,7 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Extract user data
     platform_username = user[3]  # platform_username is at index 3
     is_order_active = bool(user[4])  # order_notifications_enabled is at index 4
-    is_appeal_active = bool(user[5])  # appeal_notifications_enabled is at index 5
+    is_appeal_active = bool(user[7])  # appeal_notifications_enabled is at index 7
     
     # Update user state
     user_states[user_id] = PROFILE_VIEW
@@ -666,23 +675,21 @@ async def show_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return MAIN_MENU
 
 # 👇 This function is called externally (via webhook from the platform) when access is unblocked
-async def unlock_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # This can be connected via webhook or scheduler
-    user_id = update.message.chat_id
+# Helper to notify user when account is unfrozen
+async def notify_account_unfrozen(bot, user_id: int):
     logger.info(f"Account unlocked for user {user_id}")
-    
-    # Update user state
+    # Switch user to the initial USERNAME state
     user_states[user_id] = USERNAME
-
-    await context.bot.send_message(
+    await bot.send_message(
         chat_id=user_id,
         text="🔓 Ваш аккаунт был разблокирован. Используйте /start для продолжения"
     )
-
-    await context.bot.send_message(
-        chat_id=user_id,
-        text="👤 Введите логин Трейдера:"
-    )
+    await bot.send_message(chat_id=user_id, text="👤 Введите логин Трейдера:")
+    # 👇 This function is called externally (via webhook from the platform) when access is unblocked
+async def unlock_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # This can be connected via webhook or scheduler
+    user_id = update.message.chat_id
+    await notify_account_unfrozen(context.bot, user_id)
 
     return USERNAME
 
@@ -720,24 +727,19 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 👇 This function is called externally (via webhook from the platform) when access is unblocked
 async def send_platform_notification(bot, user_id, data: dict):
     """Send order or appeal alerts to the user based on payload."""
-    from telegram.constants import ParseMode
 
     status = data.get("status")
 
     if status == "order":
         if not get_order_notification_status(user_id):
-            logger.info(
-                f"Notification not sent to user {user_id} (order notifications disabled)"
-            )
+            logger.info(f"Notification not sent to user {user_id} (order notifications disabled)")
             return
         created_key = "order_date_created"
         timer_key = "order_timer"
         title = "💸 Новый ордер"
     elif status == "appeal":
         if not get_appeal_notification_status(user_id):
-            logger.info(
-                f"Notification not sent to user {user_id} (appeal notifications disabled)"
-            )
+            logger.info(f"Notification not sent to user {user_id} (appeal notifications disabled)")
             return
         created_key = "appeal_date_created"
         timer_key = "appeal_timer"
@@ -750,15 +752,18 @@ async def send_platform_notification(bot, user_id, data: dict):
     created_raw = data.get(created_key, "")
     created_dt = None
     closing_dt = None
+
     try:
+        utc_offset = int(data.get("UTC", 0))
         created_dt = datetime.strptime(created_raw, dt_format)
+        created_dt += timedelta(hours=utc_offset)
         closing_dt = created_dt + timedelta(minutes=int(data.get(timer_key, 0)))
     except Exception as e:
         logger.error(f"Date parse error: {e}")
 
     def fmt(dt: datetime | None, part: str) -> str:
         if not dt:
-            return "ошибка" if part == "time" else "ошибка"
+            return "ошибка"
         return dt.strftime("%H:%M:%S") if part == "time" else dt.strftime("%d.%m.%Y")
 
     created_time_str = fmt(created_dt, "time")
@@ -766,7 +771,12 @@ async def send_platform_notification(bot, user_id, data: dict):
     closing_time_str = fmt(closing_dt, "time")
     closing_date_str = fmt(closing_dt, "date")
 
+    utc_offset = int(data.get("UTC", 0))
+    utc_display = f"+{utc_offset}" if utc_offset >= 0 else str(utc_offset)
+
     pay_type = data.get("type", "")
+    pay_display = pay_type  # Сохраняем оригинальный стиль
+
     card_last = str(data.get("requisites_cardNumber", ""))[-4:]
     iban_last = str(data.get("requisites_ibanAcc", ""))[-4:]
     name = data.get("requisites_name", "")
@@ -774,48 +784,35 @@ async def send_platform_notification(bot, user_id, data: dict):
     holder_surname = data.get("requisites_cardholderSurname", "")
     holder_initial = holder_surname[:1]
 
-    if status == "order":
-        pay_display = pay_type.upper()
-        if pay_type == "iban":
-            req_str = (
-                f"{name} {pay_display} {holder_surname} "
-                f"UA***{iban_last}, {holder_name} {holder_initial}."
-            )
-        else:
-            req_str = (
-                f"{name} {holder_surname} *{card_last}, "
-                f"{holder_name} {holder_initial}."
-            )
+    if pay_type == "iban":
+        req_str = (
+            f"{name} {pay_display} {holder_surname} "
+            f"UA***{iban_last}, {holder_name} {holder_initial}."
+        )
+    else:
+        req_str = (
+            f"{name} {holder_surname} *{card_last}, "
+            f"{holder_name} {holder_initial}."
+        )
 
+    if status == "order":
         msg = (
             f"{title}\n\n"
             f"🔹 Сумма, фиат: {data.get('fiat_amount')} {data.get('currency')}\n"
             f"🔹 Реквизиты: {req_str}\n"
             f"🔹 Способ оплаты: {pay_display}\n\n"
             f"▫️ ID ордера: {data.get('order_id')}\n"
-            f"▫️ Ордер создан {created_time_str} (UTC+{data.get('UTC')}), {created_date_str}\n"
-            f"▫️ Ордер будет закрыт {closing_time_str} (UTC+{data.get('UTC')}), {closing_date_str}\n\n"
+            f"▫️ Ордер создан {created_time_str} (UTC{utc_display}), {created_date_str}\n"
+            f"▫️ Ордер будет закрыт {closing_time_str} (UTC{utc_display}), {closing_date_str}\n\n"
             f"🔹 Мой курс: {data.get('trader_rate')} ({data.get('trader_fee')}%)\n"
             f"🔹 Курс биржи: {data.get('exchange_rate')}"
         )
     else:  # appeal
-        pay_display = pay_type.upper()
-        if pay_type == "iban":
-            req_str = (
-                f"{name} {pay_display} {holder_surname} "
-                f"UA***{iban_last}, {holder_name} {holder_initial}."
-            )
-        else:
-            req_str = (
-                f"{name} {holder_surname} *{card_last}, "
-                f"{holder_name} {holder_initial}."
-            )
-
         order_created_dt = None
         try:
-            order_created_dt = datetime.strptime(
-                data.get("order_date_created", ""), dt_format
-            )
+            order_created_raw = data.get("order_date_created", "")
+            order_created_dt = datetime.strptime(order_created_raw, dt_format)
+            order_created_dt += timedelta(hours=utc_offset)
         except Exception:
             pass
 
@@ -828,16 +825,13 @@ async def send_platform_notification(bot, user_id, data: dict):
             f"🔸 Реквизиты: {req_str}\n"
             f"🔸 Способ оплаты: {pay_display}\n\n"
             f"▫️ ID ордера: {data.get('order_id')}\n"
-            f"▫️ Ордер создан {order_created_time} (UTC+{data.get('UTC')}), {order_created_date}\n"
-            f"▫️ Апелляция создана {created_time_str} (UTC+{data.get('UTC')}), {created_date_str}\n"
-            f"▫️ Апелляция будет закрыта {closing_time_str} (UTC+{data.get('UTC')}), {closing_date_str}"
+            f"▫️ Ордер создан {order_created_time} (UTC{utc_display}), {order_created_date}\n"
+            f"▫️ Апелляция создана {created_time_str} (UTC{utc_display}), {created_date_str}\n"
+            f"▫️ Апелляция будет закрыта {closing_time_str} (UTC{utc_display}), {closing_date_str}"
         )
 
     await bot.send_message(chat_id=user_id, text=msg, parse_mode=ParseMode.HTML)
-    logger.info(
-        f"Notification sent to user {user_id} for {status} {data.get('order_id')}"
-    )
-
+    logger.info(f"Notification sent to user {user_id} for {status} {data.get('order_id')}")
 
 # Handle order details button
 async def order_details_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
