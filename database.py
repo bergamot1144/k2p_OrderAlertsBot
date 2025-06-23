@@ -1,6 +1,6 @@
 ﻿import sqlite3
 import logging
-from config import DB_NAME
+from config import DB_NAME, ADMIN_USERNAMES
 
 logger = logging.getLogger(__name__)
 

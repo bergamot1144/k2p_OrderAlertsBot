@@ -14,8 +14,6 @@ from database import (
 )
 from utils import load_info_text, save_info_text
 from config import DEFAULT_INFO, INFO_VIEW
-from states import WAITING_INFO_TEXT
-from utils import load_info_text
 from handlers.session import user_states
 from handlers.user import ensure_active_session, show_info, show_main_menu
 
@@ -56,7 +54,7 @@ async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Create admin menu keyboard
     keyboard = [
         [ADMIN_BROADCAST_BTN, ADMIN_USERS_BTN],
-        [ADMIN_STATS_BTN, ADMIN_INFO_EDIT_BTN]
+        [ADMIN_STATS_BTN, ADMIN_INFO_EDIT_BTN],
         [BACK_BTN],
     ]
     
