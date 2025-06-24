@@ -102,14 +102,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # Запрос логина
-    await update.message.reply_text("👤 Введите логин Трейдера:")
+    if user.username in ADMIN_USERNAMES:
+        keyboard = ReplyKeyboardMarkup([[ADMIN_BTN]], resize_keyboard=True, one_time_keyboard=False)
+    else:
+        keyboard = ReplyKeyboardRemove()
+    await update.message.reply_text("👤 Введите логин Трейдера:", reply_markup=keyboard)
 
     return USERNAME
 
 # Get username
 async def receive_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    user_data_temp[user_id] = {"username": update.message.text}
+    text = update.message.text
+
+    if text == ADMIN_BTN and (update.effective_user.username in ADMIN_USERNAMES):
+        from handlers.admin import admin_panel_command
+        return await admin_panel_command(update, context)
+
+    user_data_temp[user_id] = {"username": text}
     password_attempts[user_id] = 0
     
     # Update user state
@@ -124,7 +134,12 @@ async def receive_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
-    password = update.message.text
+    text = update.message.text
+    if text == ADMIN_BTN and (user.username in ADMIN_USERNAMES):
+        from handlers.admin import admin_panel_command
+        return await admin_panel_command(update, context)
+
+    password = text
     entered_username = user_data_temp[user_id]["username"]
     tg_username = user.username if user.username else user.first_name
 
@@ -189,7 +204,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, sup
 
     user_id = update.effective_user.id
     platform_username = get_platform_username(user_id)
-    if not platform_username:
+    if not platform_username and not is_admin(user_id):
         await context.bot.send_message(
             chat_id=user_id,
             text="⚠️ Сначала пройдите авторизацию командой /start",

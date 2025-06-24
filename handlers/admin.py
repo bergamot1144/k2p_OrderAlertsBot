@@ -1,5 +1,5 @@
 ﻿import logging
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from telegram.helpers import escape_markdown
 from config import (
@@ -10,12 +10,12 @@ from config import (
 )
 from database import (
     is_admin, get_all_users, get_user_by_id, ban_user_by_id, unban_user_by_id,
-    get_user_stats, add_user, promote_to_admin
+    get_user_stats, add_user, promote_to_admin, get_platform_username
 )
 from utils import load_info_text, save_info_text
 from config import DEFAULT_INFO, INFO_VIEW
 from handlers.session import user_states
-from handlers.user import ensure_active_session, show_info, show_main_menu
+from handlers.user import ensure_active_session, show_info, show_main_menu, start
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,14 @@ async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == BACK_BTN:
         logger.info(f"Admin {user_id} pressed Back button in admin menu")
         
-        # Update user state
+        # If admin is not authorized yet, restart the login flow
+        if not get_platform_username(user_id):
+            user_states.pop(user_id, None)
+            from handlers.user import start  # Imported here to avoid circular deps
+            return await start(update, context)
+
+        # Otherwise return to the regular main menu
+
         user_states[user_id] = MAIN_MENU
         
         # Show main menu directly
@@ -397,17 +404,6 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Get statistics from database
     stats = get_user_stats()
     
-    # Create back button keyboard
-    keyboard = [
-        [BACK_BTN]
-    ]
-    
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True,
-        one_time_keyboard=False
-    )
-    
     await update.message.reply_text(
         "📊 *Статистика*\n\n"
         f"Всего пользователей: {stats['total']}\n"
@@ -416,8 +412,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Администраторов: {stats['admin']}\n"
         f"Пользователей с ордерными оповещениями: {stats['order_notifications_enabled']}\n"
         f"Пользователей с апелляционными оповещениями: {stats['appeal_notifications_enabled']}",
-        parse_mode='Markdown',
-        reply_markup=reply_markup
+       parse_mode='Markdown'
     )
     
     # Stay in admin menu
@@ -478,10 +473,10 @@ async def receive_info_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         "✅ *Информационный блок обновлен*\n\n"
-        f"Новый текст:\n\n{new_text}",
-        parse_mode='Markdown'
+       f"Новый текст:\n\n{new_text}"
+        , parse_mode="Markdown"
     )
-    
-    # Return to info view
-    
-    return await show_info(update, context)
+
+    # Go back to the admin menu after successful edit
+
+    return await show_admin_menu(update, context)
