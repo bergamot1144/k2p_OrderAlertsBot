@@ -10,7 +10,8 @@ from database import init_db, get_active_user_sessions, delete_user
 from config import (
     BOT_TOKEN, USERNAME, PASSWORD, MAIN_MENU, PROFILE_VIEW,
     INFO_VIEW, LOGOUT_CONFIRM, ADMIN_MENU, ADMIN_BROADCAST,
-    ADMIN_USER_LIST, WAITING_INFO_TEXT, CANCEL_LOGOUT, BAN_USER_PREFIX,
+    ADMIN_BROADCAST_CONFIRM, ADMIN_USER_LIST, WAITING_INFO_TEXT,
+    WAITING_INFO_CONFIRM, CANCEL_LOGOUT, BAN_USER_PREFIX,
     AUTH_ENDPOINT
 )
 from handlers.user import (
@@ -20,8 +21,8 @@ from handlers.user import (
     handle_unknown, handle_unknown_callback
 )
 from handlers.admin import (
-    handle_admin_menu, handle_broadcast, handle_user_list,
-    handle_ban_user, info_edit_command, receive_info_text,
+    handle_admin_menu, handle_broadcast, confirm_broadcast, handle_user_list,
+    handle_ban_user, info_edit_command, receive_info_text, confirm_info_text,
     admin_panel_command
 )
 from webhook_server import app as fastapi_app  # FastAPI сервер
@@ -84,11 +85,17 @@ async def run_all():
             PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_password)],
             MAIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu)],
             PROFILE_VIEW: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_profile_view)],
-            LOGOUT_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_logout_confirmation)],
+            # LOGOUT_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_logout_confirmation)],
+            LOGOUT_CONFIRM: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_logout_confirmation),
+                CallbackQueryHandler(cancel_logout, pattern=f"^{CANCEL_LOGOUT}$"),
+            ],
             ADMIN_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_admin_menu)],
             ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_broadcast)],
+            ADMIN_BROADCAST_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_broadcast)],
             ADMIN_USER_LIST: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_list)],
             WAITING_INFO_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_info_text)],
+            WAITING_INFO_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_info_text)],
         },
         fallbacks=[
             CommandHandler("start", start),
@@ -101,7 +108,7 @@ async def run_all():
    
     app.add_handler(CommandHandler("unlock", unlock_callback))
     app.add_handler(CommandHandler("admin", admin_panel_command))
-    app.add_handler(CallbackQueryHandler(cancel_logout, pattern=f"^{CANCEL_LOGOUT}$"))
+    # app.add_handler(CallbackQueryHandler(cancel_logout, pattern=f"^{CANCEL_LOGOUT}$"))
     app.add_handler(CallbackQueryHandler(handle_ban_user, pattern=f"^{BAN_USER_PREFIX}"))
     app.add_handler(CallbackQueryHandler(order_details_callback, pattern=r"^order_"))
 

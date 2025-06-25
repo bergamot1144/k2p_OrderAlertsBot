@@ -5,8 +5,9 @@ from telegram.helpers import escape_markdown
 from config import (
     ADMIN_MENU, ADMIN_BROADCAST, ADMIN_USER_LIST, ADMIN_BROADCAST_BTN,
     ADMIN_USERS_BTN, ADMIN_STATS_BTN, BACK_BTN, SUPPORT_CONTACT,
-    WAITING_INFO_TEXT, MAIN_MENU, BAN_USER_PREFIX, ADMIN_INFO_EDIT_BTN,
-    ADMIN_USERNAMES,
+    WAITING_INFO_TEXT, WAITING_INFO_CONFIRM, MAIN_MENU, BAN_USER_PREFIX,
+    ADMIN_INFO_EDIT_BTN, ADMIN_BROADCAST_CONFIRM, ADMIN_USERNAMES,
+    CONFIRM_BTN, CANCEL_BTN,
 )
 from database import (
     is_admin, get_all_users, get_user_by_id, ban_user_by_id, unban_user_by_id,
@@ -15,7 +16,15 @@ from database import (
 from utils import load_info_text, save_info_text
 from config import DEFAULT_INFO, INFO_VIEW
 from handlers.session import user_states
-from handlers.user import ensure_active_session, show_info, show_main_menu, start
+from handlers.user import (
+    ensure_active_session,
+    show_info,
+    show_main_menu,
+    start,
+    user_states,
+    user_data_temp,
+    password_attempts,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +74,7 @@ async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     await update.message.reply_text(
-        "🔐 *Админ-панель*\n\n"
-        "Выберите действие:",
+        "🔐 *Админ-панель*\n",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -157,7 +165,7 @@ async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ADMIN_BROADCAST
 
-# Handle broadcast message
+# Handle broadcast message text and ask for confirmation
 async def handle_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
@@ -186,41 +194,71 @@ async def handle_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Show admin menu directly
         return await show_admin_menu(update, context)
     
-    # Get all users from database
+    # Ask for confirmation
+    context.user_data['broadcast_text'] = text
+    user_states[user_id] = ADMIN_BROADCAST_CONFIRM
+
+    keyboard = [[CONFIRM_BTN, CANCEL_BTN]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+
+    await update.message.reply_text(
+        f"Ваш новый текст:\n\n{text}",
+        reply_markup=reply_markup
+    )
+
+    return ADMIN_BROADCAST_CONFIRM
+
+# Final confirmation step for broadcast
+async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = update.message.text
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
+
+    if not is_admin(user_id):
+        await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
+        return ConversationHandler.END
+
+    current_state = user_states.get(user_id, ADMIN_BROADCAST_CONFIRM)
+    if current_state != ADMIN_BROADCAST_CONFIRM:
+        return await show_admin_menu(update, context)
+
+    if text == CANCEL_BTN or text == BACK_BTN:
+        user_states[user_id] = ADMIN_MENU
+        return await show_admin_menu(update, context)
+
+    if text != CONFIRM_BTN:
+        return ADMIN_BROADCAST_CONFIRM
+
+    message_text = context.user_data.get('broadcast_text', '')
+
     users = get_all_users()
-    
-    # Count successful and failed messages
     success_count = 0
     fail_count = 0
-    
-    # Send broadcast message to all users
+
     for user in users:
         user_telegram_id = user[0]
-        
-        # Skip banned users
-        if user[3]:  # banned is at index 3
+        if user[3]:
             continue
-        
         try:
             await context.bot.send_message(
                 chat_id=user_telegram_id,
-                text=f"📢 *Сообщение от администратора*\n\n{text}",
+                text=f"📢 *Сообщение от администратора*\n\n{message_text}",
                 parse_mode='Markdown'
             )
             success_count += 1
         except Exception as e:
             logger.error(f"Failed to send broadcast to user {user_telegram_id}: {e}")
             fail_count += 1
-    
-    # Send result to admin
+
     await update.message.reply_text(
         f"✅ *Рассылка завершена*\n\n"
         f"Отправлено: {success_count}\n"
         f"Не отправлено: {fail_count}",
         parse_mode='Markdown'
     )
-    
-    # Return to admin menu
+
+    user_states[user_id] = ADMIN_MENU
     return await show_admin_menu(update, context)
 
 # Show user list
@@ -368,13 +406,17 @@ async def handle_ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(
                 chat_id=user_id,
-                text="🔓 Ваш аккаунт был разблокирован. Вы снова можете пользоваться ботом."
+                text="🔓 Ваш аккаунт был разблокирован. Используйте /start для повторной авторизации."
             )
         except Exception as e:
             logger.error(f"Failed to notify user {user_id} about unban: {e}")
     else:
         # Ban user
         ban_user_by_id(user_id)
+
+        user_states.pop(user_id, None)
+        user_data_temp.pop(user_id, None)
+        password_attempts.pop(user_id, None)
         
         await query.edit_message_text(f"🚫 Пользователь {user[2]} заблокирован.")
         try:
@@ -453,30 +495,55 @@ async def receive_info_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_text = update.message.text
     if not await ensure_active_session(update, context):
         return ConversationHandler.END
-    # Check if user is admin
     if not is_admin(user_id):
         await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
         return ConversationHandler.END
-    
-    # Check if user wants to cancel
+
     if new_text == BACK_BTN:
         logger.info(f"Admin {user_id} canceled info editing")
-        
-        
-        return await show_info(update, context)
-    
-    # Save new info text
-    info_data = {"text": new_text}
-    save_info_text(info_data)
-    
-    logger.info(f"Admin {user_id} updated info text")
-    
+        user_states[user_id] = ADMIN_MENU
+        return await show_admin_menu(update, context)
+
+    context.user_data['new_info_text'] = new_text
+    user_states[user_id] = WAITING_INFO_CONFIRM
+
+    keyboard = [[CONFIRM_BTN, CANCEL_BTN]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
+
     await update.message.reply_text(
-        "✅ *Информационный блок обновлен*\n\n"
-       f"Новый текст:\n\n{new_text}"
-        , parse_mode="Markdown"
+        f"Ваш новый текст:\n\n{new_text}",
+        reply_markup=reply_markup
     )
 
-    # Go back to the admin menu after successful edit
+    return WAITING_INFO_CONFIRM
 
+async def confirm_info_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = update.message.text
+    if not await ensure_active_session(update, context):
+        return ConversationHandler.END
+    if not is_admin(user_id):
+        await update.message.reply_text("⛔ У вас нет прав администратора для выполнения этой команды.")
+        return ConversationHandler.END
+
+    current_state = user_states.get(user_id, WAITING_INFO_CONFIRM)
+    if current_state != WAITING_INFO_CONFIRM:
+        return await show_admin_menu(update, context)
+
+    if text == CANCEL_BTN or text == BACK_BTN:
+        user_states[user_id] = ADMIN_MENU
+        return await show_admin_menu(update, context)
+
+    if text != CONFIRM_BTN:
+        return WAITING_INFO_CONFIRM
+
+    new_text = context.user_data.get('new_info_text', '')
+    save_info_text({"text": new_text})
+
+    await update.message.reply_text(
+        "✅ *Информационный блок обновлен*",
+        parse_mode="Markdown"
+    )
+
+    user_states[user_id] = ADMIN_MENU
     return await show_admin_menu(update, context)

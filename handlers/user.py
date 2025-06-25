@@ -22,7 +22,7 @@ from database import (
     get_appeal_notification_status, set_appeal_notification_status,
     is_admin, is_user_banned, delete_user, get_platform_username, promote_to_admin
 )
-from utils import load_info_text, save_info_text
+from utils import load_info_text, save_info_text, format_pay_type
 # from states import INFO_VIEW, user_states
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ user_states = {}  # Track user states
 
 # Helper to ensure the user session is active
 async def ensure_active_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Return True if the user exists, is not banned and has an active session."""
     user_id = update.effective_user.id
     user = get_user_by_id(user_id)
 
@@ -50,6 +51,24 @@ async def ensure_active_session(update: Update, context: ContextTypes.DEFAULT_TY
 
         user_states.pop(user_id, None)
         user_data_temp.pop(user_id, None)
+        password_attempts.pop(user_id, None)
+        return False
+
+    if is_user_banned(user_id):
+        text = (
+            "❌ *Ваш аккаунт был заблокирован*\n\n"
+            f"По вопросам доступа к Боту можете обращаться к {SUPPORT_CONTACT}"
+        )
+        if getattr(update, "message", None):
+            await update.message.reply_text(text, parse_mode='Markdown', reply_markup=ReplyKeyboardRemove())
+        elif getattr(update, "callback_query", None):
+            await update.callback_query.message.reply_text(text, parse_mode='Markdown', reply_markup=ReplyKeyboardRemove())
+        else:
+            await context.bot.send_message(chat_id=user_id, text=text, parse_mode='Markdown', reply_markup=ReplyKeyboardRemove())
+
+        user_states.pop(user_id, None)
+        user_data_temp.pop(user_id, None)
+        password_attempts.pop(user_id, None)
         return False
 
     return True
@@ -96,7 +115,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Приветственное сообщение
     await update.message.reply_text(
         f"Привет, {username} 👋🏻\n\n"
-        "Этот Бот поможет Трейдерам Платформы *Konvert2pay* получать оповещения об открытых ордерах.",
+        "Этот Бот поможет Трейдерам Платформы *Konvert2pay* получать оповещения об открытых ордерах и апелляциях.",
         parse_mode='Markdown',
         reply_markup=ReplyKeyboardRemove()
     )
@@ -258,7 +277,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, sup
     elif suppress_text:
         text = "✅ Вы успешно авторизовались."
     else:
-        text = "📁Главное меню"
+        text = "📁 Главное меню"
 
     try:
         if hasattr(update, 'callback_query') and update.callback_query:
@@ -307,7 +326,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check if user is banned
     if is_user_banned(user_id):
         await update.message.reply_text(
-            "❌ *Ваш аккаунт был заблокирован*\n\n"
+            "🚫 Ваш аккаунт был заблокирован\n\n"
             f"По вопросам доступа к Боту можете обращаться к {SUPPORT_CONTACT}",
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardRemove()
@@ -600,16 +619,16 @@ async def cancel_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"User {user_id} canceled logout")
     
-    # Update user state back to profile view
-    user_states[user_id] = PROFILE_VIEW
-    logger.info(f"User {user_id} is now in PROFILE_VIEW state after canceling logout")
-    
-    # Create profile keyboard
+     # Return the user to the main menu instead of profile view
+    user_states[user_id] = MAIN_MENU
+    logger.info(f"User {user_id} is now in MAIN_MENU state after canceling logout")
     keyboard = [
-        [BACK_BTN],
-        [LOGOUT_BTN]
+        [PROFILE_BTN, INFO_BTN],
+        [DEACTIVATE_ORDER_BTN if is_order_active else ACTIVATE_ORDER_BTN,
+         DEACTIVATE_APPEAL_BTN if is_appeal_active else ACTIVATE_APPEAL_BTN]
     ]
-    
+    if is_admin(user_id):
+        keyboard.append([ADMIN_BTN])
     reply_markup = ReplyKeyboardMarkup(
         keyboard,
         resize_keyboard=True,
@@ -631,18 +650,14 @@ async def cancel_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error deleting previous message: {e}")
     
-    # Send the profile view again with keyboard
+     # Show the main menu again with keyboard
     await context.bot.send_message(
         chat_id=user_id,
-        text=f"👤 *Профиль*\n\n"
-             f"Логин: `{platform_username}`\n"
-             f"Оповещения по ордерам: {'✅ Включены' if is_order_active else '❌ Отключены'}\n"
-             f"Оповещения по апелляциям: {'✅ Включены' if is_appeal_active else '❌ Отключены'}",
-        parse_mode='Markdown',
+        text="📁Главное меню",
         reply_markup=reply_markup
     )
-    
-    return PROFILE_VIEW
+
+    return MAIN_MENU
 
 # Show information
 async def show_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -790,8 +805,8 @@ async def send_platform_notification(bot, user_id, data: dict):
     utc_offset = int(data.get("UTC", 0))
     utc_display = f"+{utc_offset}" if utc_offset >= 0 else str(utc_offset)
 
-    pay_type = data.get("type", "")
-    pay_display = pay_type  # Сохраняем оригинальный стиль
+    pay_type = data.get("type", "").lower()
+    pay_display = format_pay_type(pay_type)
 
     card_last = str(data.get("requisites_cardNumber", ""))[-4:]
     iban_last = str(data.get("requisites_ibanAcc", ""))[-4:]
@@ -802,12 +817,12 @@ async def send_platform_notification(bot, user_id, data: dict):
 
     if pay_type == "iban":
         req_str = (
-            f"{name} {pay_display} {holder_surname} "
+            f"{name} {pay_display}"
             f"UA***{iban_last}, {holder_name} {holder_initial}."
         )
     else:
         req_str = (
-            f"{name} {holder_surname} *{card_last}, "
+            f"{name} *{card_last}, "
             f"{holder_name} {holder_initial}."
         )
 

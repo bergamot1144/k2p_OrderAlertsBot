@@ -36,13 +36,22 @@ def get_user_id_by_trader_username(username: str) -> int:
 def register_trader(username: str, user_id: int):
     user_map[username] = user_id
 
+def format_pay_type(pay_type: str) -> str:
+    """Return payment type in strict Card/OneClick/IBAN format."""
+    mapping = {
+        "card": "Card",
+        "oneclick": "OneClick",
+        "iban": "IBAN",
+    }
+    return mapping.get(pay_type.lower(), pay_type)
+
 def format_order_message(data: dict) -> str:
     return (
         f"🔹 Сумма, фиат: {data['fiat_amount']} {data['currency']}\n"
         f"🔹 Реквизиты: {data['requisites_name']} "
         f"{str(data.get('requisites_cardNumber', ''))[-4:]}, "
         f"{data.get('requisites_cardholderName', '')} {data.get('requisites_cardholderSurname', '')[0]}.\n"
-        f"🔹 Способ оплаты: {data['type']}\n\n"
+        f"🔹 Способ оплаты: {format_pay_type(data['type'])}\n\n"
         f"▫️ ID сделки: {data['order_id']}\n"
         f"▫️ Создана: время {data['date_created']} (UTC+{data['UTC']}), дата {data['date_created']}\n"
         f"▫️ Время закрытия: время+{data['timer']} минут {data['date_created']} (UTC+{data['UTC']}), дата {data['date_created']}\n\n"

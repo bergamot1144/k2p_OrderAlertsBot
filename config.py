@@ -32,18 +32,20 @@ DEFAULT_INFO = {
 
 # Constants for conversation states
 (
-    USERNAME, 
-    PASSWORD, 
-    WAITING_INFO_TEXT, 
-    MAIN_MENU, 
-    PROFILE_VIEW, 
-    INFO_VIEW, 
+    USERNAME,
+    PASSWORD,
+    WAITING_INFO_TEXT,
+    WAITING_INFO_CONFIRM,
+    MAIN_MENU,
+    PROFILE_VIEW,
+    INFO_VIEW,
     LOGOUT_CONFIRM,
     ADMIN_MENU,
     ADMIN_BROADCAST,
+    ADMIN_BROADCAST_CONFIRM,
     ADMIN_USER_LIST,
     ADMIN_BAN_USER
-) = range(11)
+) = range(13)
 
 # Menu button texts
 PROFILE_BTN = "👤 Профиль"
@@ -61,6 +63,11 @@ ADMIN_BROADCAST_BTN = "📢 Рассылка"
 ADMIN_USERS_BTN = "👥 Список пользователей"
 ADMIN_STATS_BTN = "📊 Статистика"
 ADMIN_INFO_EDIT_BTN = "✏️ Изменить информацию"
+
+# Generic buttons
+CONFIRM_BTN = "Подтвердить"
+CANCEL_BTN = "Отмена"
+
 
 # Callback data constants
 CANCEL_LOGOUT = "cancel_logout"
