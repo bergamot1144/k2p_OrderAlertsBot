@@ -817,7 +817,7 @@ async def send_platform_notification(bot, user_id, data: dict):
 
     if pay_type == "iban":
         req_str = (
-            f"{name} {pay_display}"
+            f"{name} "
             f"UA***{iban_last}, {holder_name} {holder_initial}."
         )
     else:
@@ -829,7 +829,7 @@ async def send_platform_notification(bot, user_id, data: dict):
     if status == "order":
         msg = (
             f"{title}\n\n"
-            f"🔹 Сумма, фиат: {data.get('fiat_amount')} {data.get('currency')}\n"
+            f"🔹 Сумма, фиат: {data.get('fiat_amount')} {data.get('currency').upper()}\n"
             f"🔹 Реквизиты: {req_str}\n"
             f"🔹 Способ оплаты: {pay_display}\n\n"
             f"▫️ ID ордера: {data.get('order_id')}\n"
@@ -852,7 +852,7 @@ async def send_platform_notification(bot, user_id, data: dict):
 
         msg = (
             f"{title}\n\n"
-            f"🔸 Сумма, фиат: {data.get('fiat_amount')} {data.get('currency')}\n"
+            f"🔸 Сумма, фиат: {data.get('fiat_amount')} {data.get('currency').upper()}\n"
             f"🔸 Реквизиты: {req_str}\n"
             f"🔸 Способ оплаты: {pay_display}\n\n"
             f"▫️ ID ордера: {data.get('order_id')}\n"
