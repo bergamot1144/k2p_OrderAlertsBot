@@ -11,7 +11,7 @@ from config import (
 )
 from database import (
     is_admin, get_all_users, get_user_by_id, ban_user_by_id, unban_user_by_id,
-    get_user_stats, add_user, promote_to_admin, get_platform_username
+    get_user_stats, add_user, promote_to_admin, get_platform_username, is_user_banned
 )
 from utils import load_info_text, save_info_text
 from config import DEFAULT_INFO, INFO_VIEW
@@ -396,7 +396,7 @@ async def handle_ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Check if user is banned
-    is_banned = bool(user[6])  # banned is at index 6
+    is_banned = is_user_banned(user_id)
     
     if is_banned:
         # Unban user
@@ -406,7 +406,7 @@ async def handle_ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(
                 chat_id=user_id,
-                text="🔓 Ваш аккаунт был разблокирован. Используйте /start для повторной авторизации."
+                text="🔓 Ваш аккаунт был разблокирован. \n\nИспользуйте /start для повторной авторизации."
             )
         except Exception as e:
             logger.error(f"Failed to notify user {user_id} about unban: {e}")
@@ -423,7 +423,7 @@ async def handle_ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=user_id,
                 text=(
-                    "🚫 Ваш аккаунт был заблокирован. "
+                    "🚫 Ваш аккаунт был заблокирован.\n\n"
                     f"По вопросам доступа к Боту можете обращаться к {SUPPORT_CONTACT}"
                 )
             )

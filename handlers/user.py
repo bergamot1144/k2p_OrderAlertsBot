@@ -55,9 +55,10 @@ async def ensure_active_session(update: Update, context: ContextTypes.DEFAULT_TY
         return False
 
     if is_user_banned(user_id):
+        safe_support = escape_markdown(SUPPORT_CONTACT)
         text = (
             "❌ *Ваш аккаунт был заблокирован*\n\n"
-            f"По вопросам доступа к Боту можете обращаться к {SUPPORT_CONTACT}"
+            f"По вопросам доступа к Боту можете обращаться к {safe_support}"
         )
         if getattr(update, "message", None):
             await update.message.reply_text(text, parse_mode='Markdown', reply_markup=ReplyKeyboardRemove())
@@ -88,9 +89,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Проверка блокировки
     if is_user_banned(user_id):
+        safe_support = escape_markdown(SUPPORT_CONTACT)
         await update.message.reply_text(
             "❌ *Ваш аккаунт был заблокирован*\n\n"
-            f"По вопросам доступа к Боту можете обращаться к {SUPPORT_CONTACT}",
+            f"По вопросам доступа к Боту можете обращаться к {safe_support}",
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardRemove()
         )
@@ -325,9 +327,10 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Check if user is banned
     if is_user_banned(user_id):
+        safe_support = escape_markdown(SUPPORT_CONTACT)
         await update.message.reply_text(
             "🚫 Ваш аккаунт был заблокирован\n\n"
-            f"По вопросам доступа к Боту можете обращаться к {SUPPORT_CONTACT}",
+            f"По вопросам доступа к Боту можете обращаться к {safe_support}",
             parse_mode='Markdown',
             reply_markup=ReplyKeyboardRemove()
         )
@@ -713,7 +716,10 @@ async def notify_account_unfrozen(bot, user_id: int):
     user_states[user_id] = USERNAME
     await bot.send_message(
         chat_id=user_id,
-        text="🔓 Ваш аккаунт был разблокирован. Используйте /start для продолжения"
+        text=(
+            "🔓 Ваш аккаунт был разблокирован. "
+            "Используйте /start для повторной авторизации."
+        )
     )
     await bot.send_message(chat_id=user_id, text="👤 Введите логин Трейдера:")
     # 👇 This function is called externally (via webhook from the platform) when access is unblocked
@@ -758,6 +764,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 👇 This function is called externally (via webhook from the platform) when access is unblocked
 async def send_platform_notification(bot, user_id, data: dict):
     """Send order or appeal alerts to the user based on payload."""
+    # Skip sending messages to banned users
+    if is_user_banned(user_id):
+        logger.info(f"Notification not sent to banned user {user_id}")
+        return
 
     status = data.get("status")
 

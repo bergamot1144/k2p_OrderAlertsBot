@@ -74,9 +74,14 @@ def get_user_by_id(telegram_id):
         return cursor.fetchone()
 
 def ban_user_by_id(telegram_id):
+    """Mark the user as banned and disable all notifications."""
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute("UPDATE users SET banned = 1 WHERE telegram_id = ?", (telegram_id,))
+        cursor.execute(
+            "UPDATE users SET banned = 1, notifications_enabled = 0, "
+            "appeal_notifications_enabled = 0 WHERE telegram_id = ?",
+            (telegram_id,),
+        )
         conn.commit()
 
 def unban_user_by_id(telegram_id):
